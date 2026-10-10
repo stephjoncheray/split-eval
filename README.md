@@ -1,23 +1,36 @@
-# Split Eval
+# Split Eval — Préparation ponctuelle
 
-Projet indépendant de découpage et de préparation de l'envoi des restitutions individuelles des évaluations nationales.
+Application web pour la préparation des restitutions individuelles des évaluations nationales.
 
-## Modules prévus
+## Modules
+- **05 — Fichiers PDF** : analyser des pages PDF, vérifier manuellement nom, prénom, classe et discipline, exporter les fiches découpées en ZIP.
+- **06 — Contacts PRONOTE** : importer un CSV et repérer les courriels des responsables.
+- **07 — Destinataires** : rapprocher les deux sources et exclure les ambiguïtés.
+- **08 — Diffusion SMTP** : préparer une campagne temporaire et **exporter un ZIP** contenant chaque pièce jointe PDF, `campagne.json` et `journal.csv`. Champs de configuration SMTP temporaires, **non utilisés pour envoyer** tant qu'aucun backend HTTPS institutionnel n'est déployé.
+- **09 — Historique** : événements de session ; journal CSV téléchargeable.
 
-- **05 — Fichiers PDF** : import et découpage des restitutions individuelles.
-- **06 — Contacts PRONOTE** : import des coordonnées des responsables.
-- **07 — Destinataires** : rapprochement contrôlé des élèves, PDF et destinataires.
-- **08 — Diffusion SMTP** : préparation de campagne en un clic, simulation, confirmation explicite avant envoi via API HTTPS authentifiée.
-- **09 — Historique** : suivi des tentatives, erreurs, exclusions et acceptations SMTP.
+**Ce n'est pas une application d'analyse statistique DEPP.**
 
-Les **analyses statistiques DEPP** ne font pas partie de ce dépôt.
+## Limites actuelles
 
-## Statut
+1. **Aucun email réel n'est envoyé** et le bouton d'envoi reste désactivé. Aucun destinataire n'est crédité d'un statut « envoyé ».
+2. La reconnaissance des identités PDF n'est pas encore automatique : **saisie et validation manuelles obligatoires**.
+3. Les bibliothèques PDF sont actuellement téléchargées depuis un CDN. Leur hébergement local et un audit de confidentialité sont **nécessaires avant utilisation avec des documents scolaires nominatifs**.
+4. Le ZIP exporté contient **des données personnelles** : protéger l'accès au fichier et le supprimer après usage. L'effacement de la session ne supprime pas les téléchargements.
+5. Le traitement est effectué en mémoire dans l'onglet ouvert ; fermeture/rechargement = perte de la campagne non exportée.
+6. La préparation permet plusieurs pièces jointes par élève. **Vérifier les associations** avant tout usage opérationnel. Les homonymes et duplications restent un risque.
 
-Initialisation du dépôt : **les sources de l'application ne sont pas encore publiées**. Le code historique doit être extrait et audité avant publication.
+## SMTP réel — architecture requise
 
-## Confidentialité
+GitHub Pages ne permet pas d'ouvrir une connexion SMTP. Pour envoyer réellement :
+- un service institutionnel **HTTPS authentifié**, non ouvert comme relais SMTP arbitraire ;
+- configuration du ou des relais autorisés côté serveur, TLS obligatoire ;
+- transmission de la campagne uniquement après sélection et confirmation explicites ;
+- simulation, limitation de débit, suivi des erreurs, acceptation du serveur SMTP et journal téléchargeable ;
+- destruction des fichiers temporaires selon une durée et des mesures de confidentialité vérifiées.
 
-Ce dépôt est public. Ne jamais y ajouter de PDF nominatif, export PRONOTE, fichiers de résultats, identité ou contact d'élèves ou de parents, mot de passe ou secret SMTP.
+**Aucun identifiant SMTP, PDF, CSV ou journal d'élève ne doit être commité dans GitHub.**
 
-GitHub Pages ne permet pas d'envoyer des emails via SMTP : l'envoi réel nécessite un serveur applicatif institutionnel sécurisé. « Préparer la campagne » ne signifie **pas** « Envoyer ».
+## Hébergement
+
+Le dépôt reste privé. Pour un accès universel, une interface statique auditée pourra être publiée via un second dépôt GitHub Pages public ; **site public ne signifie pas données publiques**, sous réserve que tout traitement demeure local et qu'aucun script tiers ne récupère les fichiers.
