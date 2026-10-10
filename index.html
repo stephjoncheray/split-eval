@@ -246,7 +246,7 @@ navigate(location.hash.slice(1)||'pdf');
           const attachments=await assemble(m.files);
           const filepaths=[];
           for(const file of attachments){
-            const path='pieces_jointes/'+String(++index).padStart(5,'0')+'_'+file.name.replace(/[^A-Za-z0-9_.-]/g,'_');
+            const basename=file.name.replace(/[^A-Za-z0-9_.-]/g,'_').replace(/^\d{3,7}_/,'');let path='pieces_jointes/'+basename;let suffix=2;while(zip.file(path)){path='pieces_jointes/'+basename.replace(/\.pdf$/i,`_${suffix++}.pdf`)}index++;
             zip.file(path,file.data,{base64:true});filepaths.push(path);
           }
           manifest.messages.push({eleve:{classe:m.classe,nom:m.nom,prenom:m.prenom},to:m.emails,subject:template(byId('mailSubject').value,m),body:template(byId('mailBody').value,m),attachments:filepaths,statut:'PREPARE_NON_ENVOYE'});
@@ -262,6 +262,48 @@ navigate(location.hash.slice(1)||'pdf');
         live.textContent=`ZIP prêt : ${manifest.messages.length} dossiers, ${manifest.exclus.length} exclus. AUCUN EMAIL ENVOYÉ.`;
       }catch(error){live.textContent='Préparation impossible : '+error.message}finally{simulate.disabled=false}
     },true);
+    // Thunderbird draft export: each .eml contains recipient, text and attached PDF(s).
+    const thunder=document.createElement('button');
+    thunder.className='btn secondary';thunder.type='button';
+    thunder.id='exportThunderbird';thunder.textContent='Brouillons Thunderbird (.eml ZIP)';
+    simulate.insertAdjacentElement('afterend',thunder);
+    const mimeB64=bytes=>{let binary='';for(let i=0;i<bytes.length;i+=8192)binary+=String.fromCharCode(...bytes.subarray(i,i+8192));return btoa(binary).replace(/.{1,76}/g,'    const load=byId('loadAudit');\r\n').trimEnd()};
+    const utf8B64=text=>mimeB64(new TextEncoder().encode(text)).replace(/\r\n/g,'');
+    const header=text=>'=?UTF-8?B?'+utf8B64(text)+'?=';
+    const addressList=arr=>arr.filter(x=>/^[^\s@<>;,]+@[^\s@<>;,]+\.[^\s@<>;,]+$/.test(x)).join(', ');
+    thunder.addEventListener('click',async()=>{
+      thunder.disabled=true;
+      try{
+        if(typeof matched==='undefined'||!matched.length)throw Error('Importez les PDF et les contacts.');
+        const eligible=matched.filter(m=>m.selected);
+        if(!eligible.length)throw Error('Aucun dossier sélectionné.');
+        if(eligible.some(m=>m.status!=='PRÊT'||!m.files.length||!addressList(m.emails)))throw Error('Corrigez les destinataires ou fichiers non vérifiés avant export.');
+        const zip=new JSZip();let n=0;
+        for(const m of eligible){
+          const attached=await assemble(m.files);
+          const boundary='split_eval_'+String(n)+'_'+Date.now().toString(36);
+          const to=addressList(m.emails);
+          const subject=template(byId('mailSubject').value,m).replace(/[\r\n]/g,' ');
+          const body=template(byId('mailBody').value,m).replace(/\r?\n/g,'\r\n');
+          const chunks=['X-Unsent: 1','To: '+to,'Subject: '+header(subject),'MIME-Version: 1.0','Content-Type: multipart/mixed; boundary="'+boundary+'"','','--'+boundary,'Content-Type: text/plain; charset="UTF-8"','Content-Transfer-Encoding: base64','',mimeB64(new TextEncoder().encode(body))];
+          for(const file of attached){
+            const clean=file.name.replace(/[\r\n"\\]/g,'_').replace(/^\d{3,7}_/,'');
+            const data=Uint8Array.from(atob(file.data),c=>c.charCodeAt(0));
+            chunks.push('--'+boundary,'Content-Type: application/pdf; name="'+clean+'"','Content-Disposition: attachment; filename="'+clean+'"','Content-Transfer-Encoding: base64','',mimeB64(data));
+          }
+          chunks.push('--'+boundary+'--','');
+          const stem=[m.classe,m.nom,m.prenom].map(x=>String(x||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z0-9_-]/g,'_')).join('_');
+          let name='brouillons/'+stem+'.eml';let ix=2;
+          while(zip.file(name))name='brouillons/'+stem+'_'+(ix++)+'.eml';
+          zip.file(name,chunks.join('\r\n'));n++;
+        }
+        zip.file('LIRE_AVANT_IMPORT.txt','Brouillons MIME compatibles Thunderbird (.eml), avec pieces jointes integrees. Aucun message envoye. Ouvrir/importer chaque brouillon dans Thunderbird, verifier destinataire et documents avant envoi. Le format n assure pas un import comme brouillon dans Zimbra Webmail. Contenu confidentiel : effacer les fichiers apres usage.\r\n');
+        const blob=await zip.generateAsync({type:'blob',compression:'DEFLATE'});
+        const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='split_eval_brouillons_thunderbird.zip';a.click();setTimeout(()=>URL.revokeObjectURL(url),30000);
+        live.textContent=n+' brouillons Thunderbird exportés, avec PDF joints. Aucun envoi effectué.';
+      }catch(err){live.textContent='Export Thunderbird impossible : '+err.message}
+      finally{thunder.disabled=false}
+    });
     const load=byId('loadAudit');load.disabled=true;load.title='Le journal serveur est indisponible sur GitHub Pages.';
     const exp=byId('exportAudit');exp.disabled=true;exp.title='Le journal de préparation figure dans le ZIP exporté.';
     const help=document.querySelector('[data-step=help]');if(help){const p=document.createElement('p');p.textContent='Mode GitHub Pages : aucune API SMTP ni journal serveur. Les PDF et contacts sont traités dans le navigateur. Le bouton de préparation télécharge un ZIP confidentiel sans envoyer de messages. Les dépendances JavaScript sont actuellement chargées depuis un CDN et nécessitent un audit avant usage avec des données nominatives.';help.prepend(p)}
