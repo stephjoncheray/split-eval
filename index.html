@@ -1,88 +1,272 @@
-<!doctype html>
-<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><title>Split Eval — Préparation des campagnes</title>
-<style>
-:root{font:15px system-ui,Arial,sans-serif;color:#1a3044;background:#eef3f7}*{box-sizing:border-box}body{margin:0}aside{position:fixed;inset:0 auto 0 0;width:225px;background:#142d43;color:#fff;padding:20px}aside h1{font-size:1.4rem}aside button{display:block;width:100%;background:none;color:white;text-align:left;border:0;padding:13px;border-radius:7px;cursor:pointer}aside button.active,aside button:hover{background:#345773}main{margin-left:225px;max-width:1200px;padding:30px}section{display:none;background:white;border-radius:14px;padding:24px;box-shadow:0 6px 28px #183e5420}section.active{display:block}button,.btn{border:1px solid #ccd7e0;border-radius:7px;padding:9px 12px;background:white;color:#17384f;cursor:pointer}button.primary{background:#176b88;color:#fff;border:0}button:disabled{opacity:.55;cursor:default}input,textarea{padding:8px;max-width:100%}label{display:inline-block;margin:8px 10px 8px 0}table{border-collapse:collapse;width:100%;font-size:.88rem}th,td{border-bottom:1px solid #d9e3eb;padding:9px;text-align:left;vertical-align:top}th{background:#f1f6f9;position:sticky;top:0}.scroll{overflow:auto;max-height:55vh}.muted{color:#5c7080}.status{padding:12px;background:#e9f5f9;margin:12px 0;border-radius:8px}strong.error{color:#9b3131}@media(max-width:700px){aside{position:static;width:auto}main{margin:0;padding:14px}}@media print{aside,.no-print{display:none}main{margin:0}section{box-shadow:none}}
-</style>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js" referrerpolicy="no-referrer"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js" referrerpolicy="no-referrer"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" referrerpolicy="no-referrer"></script>
-</head><body><aside><h1>Split Eval</h1><p>Préparation des campagnes</p><button data-tab="pdf" class="active">05 · Fichiers PDF</button><button data-tab="pronote">06 · Contacts PRONOTE</button><button data-tab="recipients">07 · Destinataires</button><button data-tab="smtp">08 · Diffusion SMTP</button><button data-tab="history">09 · Historique</button></aside><main><h1>Split Eval <small class="muted">— préversion de préparation</small></h1><p class="muted">Traitement local dans le navigateur. Aucun envoi SMTP depuis GitHub.</p>
-<section id="pdf" class="active"><h2>05 · Fiches individuelles PDF</h2><p>Chargez les restitutions au format PDF. Les pages sont analysées localement ; la reconnaissance automatique reste à valider.</p><label>PDF : <input id="pdfFiles" type="file" accept=".pdf,application/pdf" multiple></label><button id="parse" class="primary">Analyser les pages</button><p id="pdfStatus" class="status">Aucun fichier.</p><div class="scroll"><table><thead><tr><th>Document</th><th>Page</th><th>Classe</th><th>Nom</th><th>Prénom</th><th>Discipline</th><th>Contrôle</th></tr></thead><tbody id="pdfRows"></tbody></table></div><button id="zip" disabled>Exporter les fiches validées (ZIP)</button></section>
-<section id="pronote"><h2>06 · Contacts PRONOTE</h2><p>CSV au format PRONOTE (séparateur point-virgule, idéalement UTF-8) : NOM, PRENOM, R1_EMAIL, R2_EMAIL. Les contacts restent en mémoire locale.</p><input id="contactsFile" type="file" accept=".csv,text/csv"><p id="contactStatus" class="status">Aucun contact.</p></section>
-<section id="recipients"><h2>07 · Destinataires</h2><p>Les lignes ambiguës, sans courriel ou sans identité complète sont exclues par défaut.</p><button id="refresh" class="primary">Recalculer les correspondances</button><p id="matchStatus" class="status">Importez PDF et PRONOTE.</p><div class="scroll"><table><thead><tr><th>Inclure</th><th>Élève</th><th>Classe</th><th>Courriels</th><th>Fichiers</th><th>État</th></tr></thead><tbody id="matchRows"></tbody></table></div></section>
-<section id="smtp"><h2>08 · Préparation SMTP</h2><p>Préparer la campagne ne déclenche aucun message. L'envoi réel nécessite une API serveur institutionnelle authentifiée, non configurée dans cette préversion.</p><label>Campagne <input id="campaign" value="Evaluations"></label><label>Objet <input id="subject" value="Résultats des évaluations — {eleve}" size="48"></label><p><label>Message<br><textarea id="body" rows="5" cols="75">Bonjour,\n\nVeuillez trouver ci-joint la restitution des évaluations de {eleve}.\n\nCordialement.</textarea></label></p><button id="prepare" class="primary">Préparer la campagne en un clic</button><p><label>Serveur SMTP <input id="smtpHost" placeholder="smtp.education.gouv.fr" autocomplete="off"></label><label>Port <input id="smtpPort" type="number" min="1" max="65535" value="587"></label><label>Sécurité <select id="smtpTls"><option value="starttls">STARTTLS</option><option value="ssl">SSL/TLS</option></select></label></p><p><label>Expéditeur <input id="smtpFrom" type="email" autocomplete="off"></label><label>Identifiant <input id="smtpUser" autocomplete="off"></label><label>Mot de passe <input id="smtpPassword" type="password" autocomplete="off"></label></p><p class="muted">Ces paramètres restent dans les champs de cette page. Ils ne sont pas inclus dans les exports et ne sont transmis à aucun serveur par cette version.</p><button id="exportCampaign" disabled>Récupérer la campagne complète (ZIP)</button> <button id="exportLog">Télécharger le journal CSV</button> <button id="erase" class="primary">Effacer la session</button><button id="send" disabled title="API HTTPS institutionnelle non configurée">Envoi réel (indisponible)</button><p id="sendStatus" class="status">Aucune campagne préparée.</p></section>
-<section id="history"><h2>09 · Historique local</h2><p>Journal des actions de cette session uniquement, non persistant et non assimilable à une preuve d'envoi SMTP.</p><div id="audit" class="status">Aucun événement.</div></section>
-</main>
-<script>
+<!DOCTYPE html>
+
+<html lang="fr"><head><meta charset="utf-8"/><meta content="width=device-width,initial-scale=1" name="viewport"/><meta content="no-referrer" name="referrer"/><title>Évaluations — Diffusion aux familles</title><style>:root{font-family:Inter,system-ui,-apple-system,Segoe UI,Arial,sans-serif;color:#192b3c;background:#f3f6fa}*{box-sizing:border-box}body{margin:0}.wrap{max-width:1240px;padding:40px 22px;margin:auto}header{margin-bottom:28px}.eyebrow{color:#397194;text-transform:uppercase;letter-spacing:.12em;font-size:12px;font-weight:800}h1{font-size:clamp(32px,5vw,50px);margin:8px 0}h1 span{color:#20688e}header p{max-width:800px;color:#526476;line-height:1.6}.panel{background:white;border:1px solid #dce5ec;border-radius:16px;padding:25px;margin-bottom:20px;box-shadow:0 10px 28px #192b3c08}h2{font-size:20px;margin:0 0 16px}.drop{display:flex;align-items:center;justify-content:center;flex-direction:column;gap:10px;background:#f7fafc;border:2px dashed #a7bdcc;border-radius:14px;min-height:230px;padding:25px;transition:.2s}.drop.drag{border-color:#17698f;background:#eaf5fa}.dropicon{font-size:44px;color:#24749c;line-height:1}.drop small{color:#617285}.btn{border:0;border-radius:9px;font-weight:700;padding:12px 19px;cursor:pointer;font-size:14px;display:inline-block}.btn.primary{background:#145e83;color:white}.btn.secondary{background:#e3f1f8;color:#145e83}.btn:disabled{opacity:.45;cursor:not-allowed}.toolbar{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-top:18px}.toolbar span{color:#647486;font-size:14px}.status{margin-top:12px;font-size:14px;color:#285774}.status.error{color:#9d3030}.progress{height:9px;border-radius:10px;overflow:hidden;background:#dcebf1;margin-top:12px}.progress div{height:100%;background:#2685ad;width:0;transition:width .15s}.heading{display:flex;justify-content:space-between;gap:20px}.heading p{color:#607486;font-size:14px;margin:0 0 18px}.count{white-space:nowrap;font-weight:700;color:#255d79}.filters{margin:0 0 15px}.filters label{font-size:14px}.tablewrap{overflow:auto}table{width:100%;border-collapse:collapse;font-size:13px}th{text-align:left;color:#516578;background:#f4f7fa}th,td{padding:10px 8px;border-bottom:1px solid #e6edf2}td:first-child{min-width:145px;max-width:230px;overflow-wrap:anywhere}td input,td select{width:100%;min-width:90px;padding:9px;border:1px solid #cad8e1;border-radius:6px;background:#fff;font:inherit}td input[name=nom]{min-width:155px}td input[name=prenom]{min-width:135px}.tag{display:inline-block;border-radius:15px;padding:5px 8px;white-space:nowrap;font-size:12px;background:#e4f4e8;color:#24643c}.tag.warn{background:#fff1d5;color:#865300}tr.issue{background:#fffcf5}.footer{padding-top:16px}.help p{color:#556879;line-height:1.6;font-size:14px;margin-bottom:0}footer{font-size:12px;text-align:center;color:#6b8090;padding:10px}@media(max-width:620px){.wrap{padding:22px 12px}.panel{padding:17px}.toolbar .btn{width:100%}.heading{display:block}}
+
+.candidate{font-size:11px;color:#82602e;line-height:1.5;overflow-wrap:anywhere}#selection{max-width:62ch;overflow-wrap:anywhere}
+th[data-sort],th[data-msort],th[data-asort]{cursor:pointer;user-select:none}th[data-sort]:hover,th[data-msort]:hover,th[data-asort]:hover{color:#0c7295}.wide,textarea,.smtpgrid input,.smtpgrid select{width:100%;max-width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:8px;background:white;color:#1e293b;box-sizing:border-box}textarea{display:block;margin:10px 0 16px;font:inherit}.smtpgrid{display:grid;grid-template-columns:2fr .7fr 1.8fr 1.8fr;gap:12px;margin:16px 0}.smtpgrid label{display:grid;gap:6px;font-size:13px}#matchRows input{min-width:220px}.btn.danger{background:#a52727;color:#fff}.note{font-size:13px;color:#64748b}.panel h3{margin-top:25px}@media(max-width:850px){.smtpgrid{grid-template-columns:1fr 1fr}}
+
+/* Navigation latérale, une étape visible */
+.app-layout{display:flex;min-height:100vh}.sidebar{width:240px;flex:0 0 240px;background:#142738;color:#e5f2fa;padding:27px 14px;position:sticky;top:0;height:100vh;display:flex;flex-direction:column;gap:7px;z-index:2}.brand{font-size:16px;font-weight:800;letter-spacing:.11em;padding:8px 11px 28px}.navlink{text-align:left;background:transparent;color:#c8d6e1;padding:15px 13px;border:0;border-radius:10px;cursor:pointer;font-weight:650;font-size:14px}.navlink:hover{background:#26435b;color:white}.navlink.active{background:#246b94;color:white;box-shadow:inset 3px 0 #82d0ff}.navfoot{margin-top:auto;font-size:11px;color:#a4bacb;padding:12px;line-height:1.6}.app-layout>.wrap{flex:1;min-width:0;max-width:none;margin:0;padding:29px clamp(18px,3vw,48px)}[data-step][hidden]{display:none!important}.panel{max-width:none}.preview{margin-top:15px;font-size:13px;overflow-wrap:anywhere}.preview table{width:100%}.preview td:first-child{min-width:auto}.smtpgrid{grid-template-columns:2fr .65fr 1.5fr 1.5fr}.sidebar+.wrap header{margin-bottom:20px}.sidebar+.wrap header h1{font-size:34px}@media(max-width:900px){.app-layout{display:block}.sidebar{width:100%;height:auto;position:static;display:flex;flex-direction:row;flex-wrap:wrap;padding:10px}.brand{padding:12px}.navlink{padding:10px;font-size:12px}.navfoot{display:none}.app-layout>.wrap{padding:16px}.smtpgrid{grid-template-columns:1fr 1fr}}
+
+/* Empêche l’analyse asynchrone de rouvrir un onglet inactif */
+.app-layout section[data-step]{display:none}.app-layout body section[hidden]{display:none!important}body[data-active-step="pdf"] section[data-step="pdf"]:not([hidden]),body[data-active-step="contacts"] section[data-step="contacts"]:not([hidden]),body[data-active-step="matches"] section[data-step="matches"]:not([hidden]),body[data-active-step="send"] section[data-step="send"]:not([hidden]),body[data-active-step="history"] section[data-step="history"]:not([hidden]),body[data-active-step="help"] section[data-step="help"]:not([hidden]){display:block}
+
+#matchRows td:last-child input[type=checkbox]{width:20px;min-width:20px;height:20px;cursor:pointer;accent-color:#14658c}#matchRows tr.excluded{background:#f2f3f6;opacity:.78}#matchRows tr.excluded td{color:#687382}#matchSummary{font-weight:650}#selectAll,#selectReady,#deselectIssues,#deselectAll{padding:8px 11px;font-size:12px}
+</style></head><body><div class="app-layout"><aside class="sidebar" id="sideNav"><div class="brand">ÉVALUATIONS</div><button class="navlink" data-nav="pdf" type="button">01 · Documents PDF</button><button class="navlink" data-nav="contacts" type="button">02 · Import PRONOTE</button><button class="navlink" data-nav="matches" type="button">03 · Destinataires</button><button class="navlink" data-nav="send" type="button">04 · Envoi SMTP</button><button class="navlink" data-nav="history" type="button">05 · Historique</button><button class="navlink" data-nav="help" type="button">ⓘ · Informations</button><div class="navfoot">Application locale · Données confidentielles</div></aside><main class="wrap"><header><div class="eyebrow">Outil de traitement local · Évaluations scolaires</div><h1>Diffusion des <span>évaluations</span></h1><p>Traitement, identification des responsables, contrôle des pièces jointes et diffusion — une étape à la fois.</p></header><section class="panel" data-step="pdf"><h2>1. Importer les PDF</h2><div class="drop" id="drop"><div class="dropicon">⇪</div><strong>Déposez vos fichiers PDF ici</strong><small>ou sélectionnez-les en plusieurs fois sur votre ordinateur</small><label class="btn secondary" for="files">Choisir les PDF</label><input accept="application/pdf,.pdf" hidden="" id="files" multiple="" type="file"/></div><div class="toolbar"><span id="selection">Aucun fichier sélectionné</span><button class="btn secondary" disabled="" id="clearFiles" type="button">Vider la liste</button><button class="btn primary" disabled="" id="analyze">Analyser les documents</button></div><div aria-live="polite" class="status" id="status" role="status"></div><div class="progress" hidden=""><div id="bar"></div></div></section><section class="panel" data-step="pdf" hidden="" id="results"><div class="heading"><div><h2>2. Vérifier les résultats</h2><p>Les champs sont modifiables avant l'export. Chaque ligne correspond à une page. Le texte source détecté est affiché pour vérification.</p></div><span class="count" id="count"></span></div><div class="toolbar filters"><label><input id="onlyIssues" type="checkbox"/> Afficher uniquement les pages à vérifier</label><span id="issues"></span></div><div class="tablewrap"><table><thead><tr><th data-sort="source">Source / page ↕</th><th data-sort="classe">Classe ↕</th><th data-sort="nom">Nom ↕</th><th data-sort="prenom">Prénom ↕</th><th data-sort="subject">Matière ↕</th><th data-sort="issue">Contrôle ↕</th></tr></thead><tbody id="rows"></tbody></table></div><div class="toolbar footer"><span>Les PDF restent dans votre navigateur.</span><button class="btn primary" id="download">Télécharger les PDF en ZIP</button></div></section><section class="panel" data-step="contacts" id="contactsPanel"><h2>2. Importer PRONOTE</h2><p>Import CSV PRONOTE (UTF-8, séparateur ;) ou Excel. Colonnes : NOM, PRENOM, R1_NOM, R1_PRENOM, R1_EMAIL, R2_NOM, R2_PRENOM, R2_EMAIL.</p><div class="toolbar"><input accept=".xlsx,.xls,.csv" id="contactsFile" type="file"/><span id="contactsInfo">Aucun export chargé</span></div><p class="note">Les correspondances doivent être contrôlées. L'export utilisé ne comporte pas la classe : tout homonyme reste bloqué.</p><div class="preview" id="contactsPreview"></div></section>
+<section class="panel" data-step="matches" id="diffusionPanel"><h2>3. Vérifier les destinataires</h2><div class="toolbar"><label>Filtrer les destinataires <select id="matchFilter"><option value="all">Tous</option><option value="ready">Prêts</option><option value="issue">À vérifier</option></select></label><span id="matchSummary">Importez des évaluations et PRONOTE</span><button type="button" class="btn secondary" id="selectAll">Tout cocher</button><button type="button" class="btn secondary" id="selectReady">Cocher les prêts</button><button type="button" class="btn secondary" id="deselectIssues">Décocher à vérifier</button><button type="button" class="btn secondary" id="deselectAll">Tout décocher</button><button class="btn secondary" id="refreshMatches">Actualiser</button></div><div class="tablewrap"><table><thead><tr><th data-msort="classe">Classe ↕</th><th data-msort="nom">Nom ↕</th><th data-msort="prenom">Prénom ↕</th><th data-msort="files">PDF ↕</th><th data-msort="emails">Responsables ↕</th><th data-msort="status">Contrôle ↕</th><th title="Cochez pour inclure dans la campagne, décochez pour exclure">Envoyer ?</th></tr></thead><tbody id="matchRows"></tbody></table></div><p class="note">Les élèves décochés ne reçoivent aucun message. Lors d’une simulation ou d’un envoi, ils sont enregistrés dans le journal au statut NON_TRAITE_EXCLU.</p></section><section class="panel" data-step="send" id="smtpPanel"><h2>5. Envoi SMTP</h2><p class="note">Variables utilisables dans l’objet et le message : {eleve}, {classe}, {responsables}, {responsable1}, {responsable2}. Les noms proviennent du CSV PRONOTE.</p><h3>Courriel</h3><label>Objet <input class="wide" id="mailSubject" value="Résultats des évaluations – {eleve} ({classe})"/></label><label>Message <textarea id="mailBody" rows="6">Bonjour,
+
+Veuillez trouver en pièces jointes les résultats des évaluations de {eleve} ({classe}).
+
+Cordialement,
+L'établissement</textarea></label><div class="smtpgrid"><label>Serveur SMTP<input autocomplete="off" id="smtpHost" value="smtp.education.gouv.fr"/></label><label>Port<select id="smtpPort"><option>587</option><option>465</option></select></label><label>Compte SMTP<input autocomplete="off" id="smtpEmail" type="email"/></label><label>Mot de passe applicatif<input autocomplete="new-password" id="smtpPassword" placeholder="Non enregistré" type="password"/></label></div><div class="toolbar"><label>Campagne <input id="campaign" value="Evaluations-2026"/></label><button class="btn secondary" id="simulate">Simuler sans envoi</button><button class="btn danger" id="sendReal">Envoyer réellement</button></div><div class="status" id="sendStatus" role="status"></div></section>
+<section class="panel" data-step="history"><h2>5. Historique et traçabilité</h2><div class="toolbar"><button class="btn secondary" id="loadAudit">Charger le journal</button><button class="btn secondary" id="exportAudit">Exporter le journal CSV</button><span id="auditCount"></span></div><div class="tablewrap"><table><thead><tr><th data-asort="horodatage_utc">Date ↕</th><th data-asort="statut">État ↕</th><th data-asort="classe">Classe ↕</th><th data-asort="nom">Élève ↕</th><th data-asort="destinataires">Destinataires ↕</th><th data-asort="piece_jointe">PDF ↕</th></tr></thead><tbody id="auditRows"></tbody></table></div><p class="note">« ACCEPTÉ SMTP » signifie uniquement que le serveur a accepté le message, pas que la famille l'a reçu ou lu. Les traces locales sont des données nominatives : sécuriser le poste et les sauvegardes.</p></section>
+<section class="panel help" data-step="help"><h2>Confidentialité et limites</h2><p>Le découpage et les imports sont effectués dans le navigateur. En cas de simulation ou d’envoi, seuls les documents sélectionnés sont transmis au service Python local (127.0.0.1) pour constitution du message et journalisation. Les bibliothèques JavaScript sont chargées depuis un CDN ; une première connexion Internet est nécessaire. Les PDF scannés sans couche texte ne peuvent pas être identifiés automatiquement. Relisez systématiquement les informations détectées avant diffusion.</p></section><footer>Version web de Split_Eval_OK_NC.py · Traitement local, sans compte utilisateur</footer></main></div><script referrerpolicy="no-referrer" src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script><script referrerpolicy="no-referrer" src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script><script referrerpolicy="no-referrer" src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script><script referrerpolicy="no-referrer" src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script><script>
 'use strict';
-const state={pages:[],contacts:[],matches:[],events:[],prepared:[]},$=id=>document.getElementById(id);
-const escapeHTML=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const norm=s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().replace(/[^A-Z0-9]/g,'');
-function log(msg){state.events.unshift(new Date().toLocaleString('fr-FR')+' : '+msg);$('audit').textContent=state.events.join('\n');}
-document.querySelectorAll('aside button').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('aside button').forEach(x=>x.classList.remove('active'));document.querySelectorAll('section').forEach(x=>x.classList.remove('active'));b.classList.add('active');$(b.dataset.tab).classList.add('active')}));
-function csvLine(line,sep=';'){const out=[];let cur='',q=false;for(let i=0;i<line.length;i++){const c=line[i];if(c==='"'){if(q&&line[i+1]==='"'){cur+='"';i++}else q=!q}else if(c===sep&&!q){out.push(cur);cur=''}else cur+=c}out.push(cur);return out}
-function parseCSV(text){text=text.replace(/^\uFEFF/,'');const lines=text.split(/\r?\n/).filter(x=>x.trim());if(!lines.length)throw Error('CSV vide');const sep=(lines[0].match(/;/g)||[]).length>=(lines[0].match(/,/g)||[]).length?';':',';const headers=csvLine(lines.shift(),sep).map(x=>norm(x));return lines.map(line=>{const fields=csvLine(line,sep),r={};headers.forEach((h,i)=>r[h]=(fields[i]||'').trim());return r})}
-function pdfKind(text,filename){const s=(text+' '+filename).toLowerCase();const fr=/fran[cç]ais/.test(s),math=/math[eé]matiques?/.test(s);return fr&&math?'FR-MATH':fr?'FR':math?'MATH':'À VÉRIFIER'}
-async function parsePdfs(){
- const files=[...$('pdfFiles').files];state.pages=[];state.prepared=[];$('exportCampaign').disabled=true;$('pdfRows').replaceChildren();$('zip').disabled=true;
- if(!files.length){$('pdfStatus').textContent='Sélectionnez au moins un PDF.';return}
- if(!window.pdfjsLib||!window.PDFLib||!window.JSZip){$('pdfStatus').textContent='Bibliothèques PDF non chargées. Ne pas importer de données confidentielles avant hébergement local des dépendances.';return}
- try{for(const f of files){const bytes=await f.arrayBuffer();const pdf=await pdfjsLib.getDocument({data:new Uint8Array(bytes.slice(0))}).promise;for(let i=1;i<=pdf.numPages;i++){const page=await pdf.getPage(i),items=(await page.getTextContent()).items;const txt=items.map(x=>x.str).join(' ');const classe=(txt.match(/\b(?:6|5|4|3)[A-Z]\d\b/i)||[])[0]||'';const record={source:f.name,bytes,page:i,classe,nom:'',prenom:'',kind:pdfKind(txt,f.name),checked:false};state.pages.push(record)}}renderPages();log('PDF chargés : '+state.pages.length+' pages. Validation manuelle requise.')}catch(e){$('pdfStatus').textContent='Erreur PDF : '+e.message}}
-function renderPages(){const tb=$('pdfRows');tb.replaceChildren();state.pages.forEach((p,i)=>{const tr=document.createElement('tr');tr.innerHTML='<td>'+escapeHTML(p.source)+'</td><td>'+p.page+'</td><td><input size="5" data-i="'+i+'" data-key="classe" value="'+escapeHTML(p.classe)+'"></td><td><input size="13" data-i="'+i+'" data-key="nom"></td><td><input size="13" data-i="'+i+'" data-key="prenom"></td><td><select data-i="'+i+'" data-key="kind">'+['FR','MATH','FR-MATH','À VÉRIFIER'].map(k=>'<option '+(p.kind===k?'selected':'')+'>'+k+'</option>').join('')+'</select></td><td>Vérification manuelle obligatoire</td>';tb.append(tr)});$('pdfStatus').textContent=state.pages.length+' pages importées. Complétez et vérifiez les identités avant le ZIP.';$('zip').disabled=false}
-$('pdfRows').addEventListener('input',e=>{const el=e.target,i=Number(el.dataset.i);if(Number.isInteger(i)&&state.pages[i]&&['classe','nom','prenom','kind'].includes(el.dataset.key)){state.pages[i][el.dataset.key]=el.value.trim();state.prepared=[];$('exportCampaign').disabled=true}});
-$('parse').onclick=parsePdfs;
-$('contactsFile').onchange=async e=>{try{const f=e.target.files[0];if(!f)return;const data=parseCSV(await f.text());if(!data.length||!('NOM'in data[0])||!('PRENOM'in data[0]))throw Error('Colonnes NOM/PRENOM absentes');state.contacts=data;state.prepared=[];$('exportCampaign').disabled=true;$('contactStatus').textContent=data.length+' contacts lus. Vérifiez les correspondances.';log('Import PRONOTE : '+data.length+' lignes')}catch(err){$('contactStatus').textContent='Erreur : '+err.message}};
-function groupMatches(){state.prepared=[];$('exportCampaign').disabled=true;const groups=new Map();state.pages.forEach(p=>{const key=norm(p.nom)+'|'+norm(p.prenom);if(!p.nom||!p.prenom)return;const g=groups.get(key)||{nom:p.nom,prenom:p.prenom,classe:p.classe,files:[],recipients:[],issue:''};g.files.push(p);if(g.classe&&p.classe&&norm(g.classe)!==norm(p.classe))g.issue='Classes contradictoires';groups.set(key,g)});
-state.matches=[...groups.values()].map(g=>{const found=state.contacts.filter(c=>norm(c.NOM)===norm(g.nom)&&norm(c.PRENOM)===norm(g.prenom));g.recipients=[...new Set(found.flatMap(c=>[c.R1EMAIL,c.R2EMAIL].filter(x=>/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(x||''))))];g.issue=g.issue||(found.length!==1?'Correspondance PRONOTE '+found.length:g.recipients.length?'':'Aucun email valide');g.selected=!g.issue;return g});
-const tb=$('matchRows');tb.replaceChildren();state.matches.forEach((g,i)=>{const tr=document.createElement('tr');tr.innerHTML='<td><input type="checkbox" data-idx="'+i+'" '+(g.selected?'checked':'')+' '+(g.issue?'disabled':'')+'></td><td>'+escapeHTML(g.nom+' '+g.prenom)+'</td><td>'+escapeHTML(g.classe)+'</td><td>'+escapeHTML(g.recipients.join(', '))+'</td><td>'+g.files.length+'</td><td>'+escapeHTML(g.issue||'Prêt')+'</td>';tb.append(tr)});
-$('matchStatus').textContent=state.matches.filter(g=>g.selected).length+' prêts sur '+state.matches.length+' élèves; '+state.pages.filter(p=>!p.nom||!p.prenom).length+' pages sans identité.'}
-$('refresh').onclick=groupMatches;
-$('matchRows').onchange=e=>{const i=Number(e.target.dataset.idx);if(state.matches[i]&&!state.matches[i].issue){state.matches[i].selected=e.target.checked;state.prepared=[];$('exportCampaign').disabled=true}};
-$('zip').onclick=async()=>{const rows=state.pages.filter(p=>p.nom&&p.prenom&&p.classe&&p.kind!=='À VÉRIFIER');if(!rows.length){$('pdfStatus').textContent='Aucune page validée à exporter.';return}const zip=new JSZip();for(const p of rows){const doc=await PDFLib.PDFDocument.load(p.bytes.slice(0));const target=await PDFLib.PDFDocument.create();const [part]=await target.copyPages(doc,[p.page-1]);target.addPage(part);let name=[p.classe,p.nom,p.prenom,p.kind].map(norm).join('_')+'.pdf';let suffix=1;while(zip.file(name))name=[p.classe,p.nom,p.prenom,p.kind,suffix++].map(norm).join('_')+'.pdf';zip.file(name,await target.save())}const blob=await zip.generateAsync({type:'blob'});download(blob,'split-eval-fiches.zip');log('Export ZIP : '+rows.length+' pages')};
-function download(blob,name){const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}
-function auditCsv(){const esc=v=>'"'+String(v??'').replace(/"/g,'""')+'"';return '\uFEFFhorodatage;evenement\r\n'+state.events.map(x=>esc(x)).join('\r\n')+'\r\n'}
-$('exportLog').onclick=()=>download(new Blob([auditCsv()],{type:'text/csv;charset=utf-8'}),'split-eval-journal.csv');
-$('prepare').onclick=()=>{
-  const prior=new Map(state.matches.map(g=>[norm(g.nom)+'|'+norm(g.prenom),g.selected]));
-  groupMatches();
-  state.matches.forEach(g=>{const k=norm(g.nom)+'|'+norm(g.prenom);if(prior.get(k)===false)g.selected=false});
-  const selected=state.matches.filter(g=>g.selected&&!g.issue&&g.files.length&&g.files.every(p=>p.classe&&p.nom&&p.prenom&&p.kind!=='À VÉRIFIER'));
-  const blocked=state.matches.length-selected.length;
-  state.prepared=selected;
-  $('exportCampaign').disabled=!selected.length;
-  $('sendStatus').textContent=selected.length+' dossiers préparés ; '+blocked+' exclus, ambigus ou incomplets. Aucun courrier envoyé. Téléchargez le ZIP sécurisé sur votre poste pour préparer le traitement SMTP.';
-  log('Préparation : '+selected.length+' dossiers ; '+blocked+' exclus ; aucun envoi SMTP');
-};
-$('exportCampaign').onclick=async()=>{
- if(!state.prepared.length||!window.PDFLib||!window.JSZip)return;
- const zip=new JSZip(),manifest={schema:1,campaign:$('campaign').value,created:new Date().toISOString(),messages:[]};
- let n=0;
- for(const g of state.prepared){
-  const attachments=[];
-  for(const p of g.files){
-   const doc=await PDFLib.PDFDocument.load(p.bytes.slice(0)),part=await PDFLib.PDFDocument.create();
-   const [pg]=await part.copyPages(doc,[p.page-1]);part.addPage(pg);
-   const path='pieces_jointes/'+String(++n).padStart(4,'0')+'_'+[p.classe,p.nom,p.prenom,p.kind].map(norm).join('_')+'.pdf';
-   zip.file(path,await part.save());attachments.push(path);
-  }
-  const eleve=g.prenom+' '+g.nom;
-  manifest.messages.push({student:{nom:g.nom,prenom:g.prenom,classe:g.classe},to:g.recipients,subject:$('subject').value.replaceAll('{eleve}',eleve),body:$('body').value.replaceAll('{eleve}',eleve),attachments,status:'PREPARE_NON_ENVOYE'});
+const $ = id => document.getElementById(id);
+let selected = [], records = [], busy = false;
+const log = [];
+if (window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+function status(s, isError=false){$('status').textContent=s;$('status').classList.toggle('error',isError)}
+function setProgress(done,total){const el=document.querySelector('.progress');el.hidden=false;$('bar').style.width=(total?Math.round(done/total*100):0)+'%'}
+function norm(t){return (t||'').normalize('NFKC').replace(/\u00a0/g,' ').replace(/[\u00ad\u200b-\u200f\ufeff]/g,'').replace(/\r\n?/g,'\n').replace(/[ \t]+/g,' ').replace(/[‐–—]/g,'-')}
+function isUpper(t){const s=t.replace(/['’\-]/g,'');return !!s && /\p{L}/u.test(s) && s===s.toUpperCase()}
+function cap(s){return s.replace(/[‐–—]/g,'-').split(/(\s+|-|['’])/).map(v=>(/^\s+$|^[-'’]$/.test(v)?v:v.charAt(0).toUpperCase()+v.slice(1).toLowerCase())).join('')}
+function nameFromLine(line){
+ const tokens=line.trim().split(/\s+/).map(t=>t.replace(/^[,.;:()\[\]{}!?]+|[,.;:()\[\]{}!?]+$/g,'')).filter(Boolean);
+ if(tokens.length>=2 && tokens.every(isUpper))return {prenom:cap(tokens[0]),nom:tokens.slice(1).join(' ').toUpperCase(),weak:true};
+ const split=tokens.findIndex((t,i)=>i>0&&isUpper(t));
+ if(split>0){return {prenom:cap(tokens.slice(0,split).join(' ')),nom:tokens.slice(split).join(' ').toUpperCase(),weak:false}}
+ // Sur certaines fiches, le prénom ET le nom sont en majuscules.
+ // La frontière n'est plus déductible du seul texte : conserver une proposition à contrôler.
+ if(tokens.length>=2 && tokens.every(isUpper))return {prenom:cap(tokens[0]),nom:tokens.slice(1).join(' ').toUpperCase(),weak:true};
+ return {prenom:'',nom:'',weak:true};
+}
+function parsePage(zones){
+ // La classe et « Année scolaire » peuvent appartenir à des objets PDF distincts.
+ // On accepte une classe seule dans le bandeau, puis on vérifie le contexte.
+ const joined=zones.classLines.join(' ');
+ const yearFound=/Ann[ée]e\s+scolaire/i.test(joined);
+ const candidates=zones.classLines.map(l=>l.match(/^\s*([0-9][A-Z][A-Z0-9]{0,5})\s*(?:Ann[ée]e|$)/i)).filter(Boolean);
+ const nearby=joined.match(/\b([0-9][A-Z][A-Z0-9]{0,5})\b(?=.{0,55}Ann[ée]e\s+scolaire)/i);
+ const classe=yearFound?(nearby?.[1]||candidates[0]?.[1]||'SANS_CLASSE'):'SANS_CLASSE';
+ const header=zones.subjectLines.join(' ').toUpperCase();
+ const combined=zones.combinedLines.join(' ').toUpperCase();
+ const isFifth=/^5[A-Z0-9]{1,5}$/.test(classe);
+ const isCombined=isFifth && /MATH[ÉE]MATIQUES/.test(combined) && /\bFRAN[ÇC]AIS\b/.test(combined);
+ const subject=isCombined?'FR-MATH':/MATH[ÉE]MATIQUES/.test(header)?'MATH':/\bFRAN[ÇC]AIS\b/.test(header)?'FR':'';
+ const candidate=zones.nameLines.find(l=>!/^En d[ée]but/i.test(l) && !/Ann[ée]e scolaire/i.test(l))||'';
+ const parsed=nameFromLine(candidate);
+ return {classe,subject,prenom:parsed.prenom,nom:parsed.nom,candidate,weak:parsed.weak};
+}
+// Les PDF transmis utilisent tous deux gabarits (CAP et seconde pro).
+// Analyse par bandes de coordonnées, en excluant explicitement la colonne droite.
+async function pageZones(page){
+ const viewport=page.getViewport({scale:1});
+ const content=await page.getTextContent();
+ const items=content.items.filter(it=>it.str?.trim()).map(it=>{
+   const [x,y]=viewport.convertToViewportPoint(it.transform[4],it.transform[5]);
+   return {x,y,str:it.str,width:it.width||0};
+ });
+ function linesFor(accept){
+   const groups=[];
+   for(const it of items.filter(accept)){
+     let group=groups.find(g=>Math.abs(g.y-it.y)<2.5);
+     if(!group){group={y:it.y,parts:[]};groups.push(group)}
+     group.parts.push(it);
+   }
+   return groups.sort((a,b)=>a.y-b.y).map(g=>{
+     const parts=g.parts.sort((a,b)=>a.x-b.x);let text='',end=null;
+     for(const it of parts){if(end!==null && it.x-end>2 && !/\s$/.test(text))text+=' ';
+       text+=it.str;end=Math.max(end??it.x,it.x+it.width)}
+     return norm(text).trim();
+   }).filter(Boolean);
  }
- zip.file('campagne.json',JSON.stringify(manifest,null,2));
- zip.file('journal.csv',auditCsv());
- zip.file('LISEZ-MOI.txt','CONFIDENTIEL : contient des donnees scolaires et les adresses des responsables. Aucun message n a ete envoye. Stocker le ZIP en lieu sur, supprimer apres traitement. Les identifiants SMTP ne figurent pas dans ce ZIP.\n');
- download(await zip.generateAsync({type:'blob'}),'split-eval-campagne-confidentielle.zip');
- log('Export campagne ZIP : '+manifest.messages.length+' dossiers, aucun envoi');
-};
-$('erase').onclick=()=>{
- if(!confirm('Effacer les fichiers, contacts, destinataires, paramètres et le journal de cette session ?'))return;
- state.pages=[];state.contacts=[];state.matches=[];state.prepared=[];state.events=[];
- for(const id of ['pdfFiles','contactsFile','smtpHost','smtpFrom','smtpUser','smtpPassword'])$(id).value='';
- for(const id of ['pdfRows','matchRows'])$(id).replaceChildren();
- $('pdfStatus').textContent='Aucun fichier.';$('contactStatus').textContent='Aucun contact.';
- $('matchStatus').textContent='Aucune correspondance.';$('sendStatus').textContent='Session effacée.';$('audit').textContent='Aucun événement.';
- $('exportCampaign').disabled=true;$('zip').disabled=true;
- alert('Session effacée de l’interface. Les copies déjà téléchargées restent sur votre ordinateur. Pour libérer la mémoire et éviter la restauration des champs, fermez cet onglet.');
-};
+ // Intervalles généreux autour des bandes observées dans les exemples.
+ const classLines=linesFor(it=>it.x<360 && it.y>=135 && it.y<169);
+ const nameLines=linesFor(it=>it.x<335 && it.y>=169 && it.y<202);
+ const subjectLines=linesFor(it=>it.y>=55 && it.y<115 && it.x>170 && it.x<415);
+ const debugLines=linesFor(it=>it.y<235);
+ // Les évaluations de 5e regroupent mathématiques et français sur UNE page.
+ const combinedLines=linesFor(it=>it.x>=40 && it.x<235 && it.y>270 && it.y<490);
+ return {classLines,nameLines,subjectLines,combinedLines,debugLines};
+}
+function updateFiles(files){
+ const incoming=Array.from(files||[]).filter(f=>/\.pdf$/i.test(f.name)||f.type==='application/pdf');
+ for(const f of incoming){
+  if(!selected.some(x=>x.name===f.name&&x.size===f.size&&x.lastModified===f.lastModified))selected.push(f);
+ }
+ $('selection').textContent=selected.length?`${selected.length} PDF : ${selected.map(x=>x.name).join(', ')}`:'Aucun fichier sélectionné';
+ $('analyze').disabled=!selected.length||busy;
+ $('clearFiles').disabled=!selected.length||busy;
+ $('results').hidden=true;records=[];status('');
+ $('files').value=''; // autorise de sélectionner à nouveau le même fichier
+}
+$('files').addEventListener('change',e=>updateFiles(e.target.files));
+$('clearFiles').addEventListener('click',()=>{if(busy)return;selected=[];updateFiles([])});
+const drop=$('drop');
+['dragenter','dragover'].forEach(k=>drop.addEventListener(k,e=>{e.preventDefault();drop.classList.add('drag')}));
+['dragleave','drop'].forEach(k=>drop.addEventListener(k,e=>{e.preventDefault();drop.classList.remove('drag')}));
+drop.addEventListener('drop',e=>updateFiles(e.dataTransfer.files));
+function controls(){for(const id of ['files','analyze','download','clearFiles'])$(id).disabled=busy; if(!selected.length){$('analyze').disabled=true;$('clearFiles').disabled=true}}
+function issue(r){return !r.nom?.trim()||!r.prenom?.trim()||r.classe==='SANS_CLASSE'||!r.subject||!!r.error||r.weak}
+function render(){const tbody=$('rows');tbody.replaceChildren();const filtered=records.filter(r=>!$('onlyIssues').checked||issue(r));for(const r of filtered){const tr=document.createElement('tr');tr.classList.toggle('issue',issue(r));const source=document.createElement('td');source.textContent=`${r.source} · p. ${r.page+1}`;if(r.candidate){const hint=document.createElement('small');hint.className='candidate';hint.textContent=`Texte lu : ${r.candidate}`;source.append(document.createElement('br'),hint)}tr.append(source);for(const [key,label] of [['classe','Classe'],['nom','Nom'],['prenom','Prénom']]){const td=document.createElement('td');const inp=document.createElement('input');inp.name=key;inp.setAttribute('aria-label',`${label} page ${r.page+1}`);inp.value=r[key];inp.addEventListener('input',()=>{r[key]=inp.value;r.weak=false;showCounts();tr.classList.toggle('issue',issue(r));tr.lastChild.replaceChildren(makeTag(r))});td.append(inp);tr.append(td)}const td=document.createElement('td'),select=document.createElement('select');select.setAttribute('aria-label',`Matière page ${r.page+1}`);for(const [v,t] of [['','Non reconnue'],['MATH','Mathématiques'],['FR','Français'],['FR-MATH','Français + mathématiques (5e)']]){const o=document.createElement('option');o.value=v;o.textContent=t;select.append(o)}select.value=r.subject;select.addEventListener('change',()=>{r.subject=select.value;showCounts();tr.classList.toggle('issue',issue(r));tr.lastChild.replaceChildren(makeTag(r))});td.append(select);tr.append(td);const last=document.createElement('td');last.append(makeTag(r));tr.append(last);tbody.append(tr)}showCounts()}
+function makeTag(r){const t=document.createElement('span');t.className='tag'+(issue(r)?' warn':'');t.textContent=r.error?'Erreur PDF':issue(r)?'À vérifier':'Identifié';return t}
+function showCounts(){$('count').textContent=`${records.length} page(s)`;const n=records.filter(issue).length;$('issues').textContent=n?`${n} page(s) à vérifier`:'Toutes les pages identifiées'}
+$('onlyIssues').addEventListener('change',render);
+$('analyze').addEventListener('click',async()=>{if(busy||!selected.length)return;if(!window.pdfjsLib||!window.PDFLib||!window.JSZip){status('Bibliothèques indisponibles. Vérifiez la connexion Internet.',true);return}busy=true;controls();records=[];log.length=0;let done=0;setProgress(0,1);try{for(let fi=0;fi<selected.length;fi++){const file=selected[fi];status(`Lecture : ${file.name}`);try{const bytes=new Uint8Array(await file.arrayBuffer());const task=pdfjsLib.getDocument({data:bytes.slice()});const doc=await task.promise;for(let i=0;i<doc.numPages;i++){let lines=[],det={},error='';try{const page=await doc.getPage(i+1);const zones=await pageZones(page);lines=zones.debugLines;det=parsePage(zones)}catch(e){error=String(e.message||e)}records.push({...{classe:'SANS_CLASSE',nom:'',prenom:'',subject:''},...det,source:file.name,page:i,fileIndex:fi,lines,error});done++;status(`${done} page(s) analysée(s)`);setProgress(fi+(i+1)/doc.numPages,selected.length);if(done%5===0)await new Promise(res=>setTimeout(res,0))}await doc.destroy()}catch(e){log.push(`ERREUR ${file.name} : ${e.message||e}`)}}if(!records.length)throw Error('Aucune page PDF lisible.');$('results').hidden=false;render();status(`Analyse terminée : ${records.length} page(s), ${records.filter(issue).length} à vérifier.`);window.refreshUnified?.()}catch(e){status(String(e.message||e),true)}finally{busy=false;controls()}});
+function safe(s){return norm(s).replace(/[<>:"/\\|?*\x00-\x1f]/g,' ').replace(/\s+/g,' ').trim()}
+function limit(s,n=240){const base=s.replace(/\.pdf$/i,'');return base.slice(0,Math.max(1,n-9))+'.pdf'}
+$('download').addEventListener('click',async()=>{if(busy||!records.length)return;const flagged=records.filter(issue).length;if(flagged&&!confirm(`${flagged} page(s) comportent des informations à vérifier. Exporter quand même ?`))return;busy=true;controls();const zip=new JSZip();const used=new Set();let completed=0;const errors=[];try{for(let fi=0;fi<selected.length;fi++){const current=records.filter(r=>r.fileIndex===fi);if(!current.length)continue;let src;try{src=await PDFLib.PDFDocument.load(await selected[fi].arrayBuffer(),{ignoreEncryption:false})}catch(e){errors.push(`${selected[fi].name} : ${e.message||e}`);continue}for(const r of current){try{const result=await PDFLib.PDFDocument.create();const [page]=await result.copyPages(src,[r.page]);result.addPage(page);const bytes=await result.save();const name=safe(r.nom||`PAGE${String(r.page+1).padStart(3,'0')}`).toUpperCase();const first=safe(r.prenom||'SANS_NOM');const classroom=safe(r.classe||'SANS_CLASSE');const subj=r.subject?'_'+r.subject:'';let filename=limit(safe(`${classroom}_${name}_${first}${subj}`)+'.pdf');let candidate=filename,num=2;while(used.has(candidate.toLowerCase())){candidate=limit(filename.replace(/\.pdf$/i,`-${num}.pdf`));num++}used.add(candidate.toLowerCase());zip.file(candidate,bytes);if(issue(r)){zip.file(`diagnostics/${safe(r.source)}-page${String(r.page+1).padStart(3,'0')}.debug.txt`,[`Attention : identification à vérifier`,r.error||'',...r.lines].join('\n'))}}catch(e){errors.push(`${r.source}, page ${r.page+1}: ${e.message||e}`)}completed++;setProgress(completed,records.length)}}zip.file('split_eval.log',[`Date : ${new Date().toISOString()}`,`PDF : ${selected.length}`,`Pages traitées : ${completed}`,`Pages signalées : ${records.filter(issue).length}`,...errors].join('\n'));status('Création de l’archive ZIP…');const blob=await zip.generateAsync({type:'blob',compression:'DEFLATE',compressionOptions:{level:4}},m=>setProgress(m.percent,100));const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='split_eval_export.zip';document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);status(`ZIP généré. ${records.filter(issue).length} page(s) nécessitent une vérification. ${errors.length} erreur(s).`)}catch(e){status(`Export impossible : ${e.message||e}`,true)}finally{busy=false;controls()}});
+
+</script><script>
+'use strict';
+let contacts=[],matched=[],audit=[],csrf='',sortState={key:'nom',dir:1},matchSort={key:'classe',dir:1},auditSort={key:'horodatage_utc',dir:-1};
+const normKey=s=>String(s||'').normalize('NFKD').replace(/[\u0300-\u036f]/g,'').replace(/[’‘]/g,"'").replace(/[-_']/g,' ').replace(/\s+/g,' ').trim().toUpperCase();
+function compare(a,b){return String(a??'').localeCompare(String(b??''),'fr',{numeric:true,sensitivity:'base'})}
+function ordered(arr,st,fn){return arr.slice().sort((a,b)=>st.dir*compare(fn(a,st.key),fn(b,st.key)))}
+async function statusBackend(){try{const r=await fetch('/api/status');if(!r.ok)throw Error();csrf=(await r.json()).csrf;$('sendStatus').textContent='Serveur Python local connecté. Simulation par défaut.'}catch{$('sendStatus').textContent='Service SMTP local indisponible : le découpage reste utilisable, mais pas les envois.'}}
+statusBackend();
+for(const th of document.querySelectorAll('th[data-sort]')){th.tabIndex=0;const click=()=>{let k=th.dataset.sort;sortState.dir=sortState.key===k?-sortState.dir:1;sortState.key=k;render()};th.addEventListener('click',click);th.addEventListener('keydown',e=>{if(e.key==='Enter')click()})}
+const originalRender=render;render=function(){let tmp=records;records=ordered(records,sortState,(r,k)=>k==='issue'?(issue(r)?'1':'0'):r[k]);originalRender();records=tmp;window.refreshUnified?.()};
+function parseContacts(rows){
+ const hdr=rows[0].map(x=>String(x||'').replace(/^\uFEFF/,'').trim().toUpperCase());
+ for(const k of ['NOM','PRENOM','R1_EMAIL','R2_EMAIL'])if(!hdr.includes(k))throw Error(`Colonne manquante : ${k}`);
+ const col=k=>hdr.indexOf(k), val=(row,key)=>col(key)<0?'':String(row[col(key)]||'').trim();
+ return rows.slice(1).filter(r=>val(r,'NOM')&&val(r,'PRENOM')).map((r,i)=>{
+   const reps=[1,2].map(n=>({nom:val(r,`R${n}_NOM`),prenom:val(r,`R${n}_PRENOM`),email:val(r,`R${n}_EMAIL`)}));
+   return {id:i,nom:val(r,'NOM'),prenom:val(r,'PRENOM'),representants:reps,
+     emails:[...new Set(reps.map(x=>x.email).filter(Boolean).map(x=>x.toLowerCase()))]};
+ });
+}
+function parseCSV(text){
+ const out=[],row=[];let field='',quoted=false;const sep=text.slice(0,300).split(/\r?\n/)[0].includes(';')?';':',';
+ for(let i=0;i<text.length;i++){
+  const c=text[i];if(c==='"'){if(quoted&&text[i+1]==='"'){field+='"';i++}else quoted=!quoted}
+  else if(c===sep&&!quoted){row.push(field);field=''}
+  else if((c==='\r'||c==='\n')&&!quoted){if(c==='\r'&&text[i+1]==='\n')i++;row.push(field);if(row.some(v=>v.trim()))out.push(row.slice());row.length=0;field=''}
+  else field+=c;
+ }
+ row.push(field);if(row.some(v=>v.trim()))out.push(row);
+ return out;
+}
+$('contactsFile').addEventListener('change',async e=>{try{const f=e.target.files[0];if(!f)return;const b=await f.arrayBuffer();let rows;if(/\.csv$/i.test(f.name)){let txt=new TextDecoder('utf-8').decode(b).replace(/^\uFEFF/,'');rows=parseCSV(txt)}else{if(!window.XLSX)throw Error('Bibliothèque XLSX non chargée');const wb=XLSX.read(b,{type:'array'});rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,defval:''})}contacts=parseContacts(rows);$('contactsInfo').textContent=`${contacts.length} fiches élèves chargées`;showContactsPreview();refreshUnified()}catch(err){$('contactsInfo').textContent='Erreur : '+err.message;contacts=[];refreshUnified()}});
+function showContactsPreview(){
+ const target=$('contactsPreview');target.replaceChildren();
+ const title=document.createElement('p');title.textContent=`Aperçu des 5 premières lignes (sur ${contacts.length}) — sans révéler les adresses dans cette vue.`;target.append(title);
+ const table=document.createElement('table');table.innerHTML='<thead><tr><th>Élève</th><th>Responsable 1</th><th>Responsable 2</th><th>Adresses distinctes</th></tr></thead>';
+ const tb=document.createElement('tbody');for(const c of contacts.slice(0,5)){
+  const tr=document.createElement('tr');for(const value of [`${c.prenom} ${c.nom}`,...c.representants.map(r=>[r.prenom,r.nom].filter(Boolean).join(' ')||'—'),String(c.emails.length)]){
+   const td=document.createElement('td');td.textContent=value;tr.append(td)
+  }tb.append(tr)
+ }table.append(tb);target.append(table);
+}
+function responsibleName(r){return [r?.prenom,r?.nom].filter(Boolean).join(' ').trim()}
+function refreshUnified(){const groups=new Map();for(const r of records){const key=[normKey(r.classe),normKey(r.nom),normKey(r.prenom)].join('|');if(!groups.has(key))groups.set(key,{classe:r.classe,nom:r.nom,prenom:r.prenom,files:[],weak:false,selected:true});const g=groups.get(key);g.files.push(r);g.weak ||= issue(r)}const old=new Map(matched.map(m=>[m.key,m]));matched=[...groups.entries()].map(([key,g])=>{const possible=contacts.filter(c=>normKey(c.nom)===normKey(g.nom)&&normKey(c.prenom)===normKey(g.prenom));const unique=possible.length===1?possible[0]:null;const prev=old.get(key);const emails=prev?.modified?prev.emails:(unique?.emails||[]);return {...g,key,emails,modified:prev?.modified||false,selected:prev?.selected??true,representants:unique?.representants||[],contactCount:possible.length,status:g.weak?'IDENTITÉ À VÉRIFIER':possible.length!==1?'CONTACT AMBIGU/ABSENT':!emails.length?'SANS EMAIL':'PRÊT'} });showMatches()}
+window.refreshUnified=refreshUnified;
+$('refreshMatches').addEventListener('click',refreshUnified);$('matchFilter').addEventListener('change',showMatches);
+for(const [id,choose] of [['selectAll',()=>true],['selectReady',m=>m.status==='PRÊT'],['deselectIssues',m=>m.status==='PRÊT'?m.selected:false],['deselectAll',()=>false]]){$(id).addEventListener('click',()=>{for(const m of matched)m.selected=choose(m);showMatches()})}
+for(const th of document.querySelectorAll('th[data-msort]')){th.tabIndex=0;th.addEventListener('click',()=>{let key=th.dataset.msort;matchSort.dir=matchSort.key===key?-matchSort.dir:1;matchSort.key=key;showMatches()})}
+function showMatches(){const body=$('matchRows');body.replaceChildren();let xs=matched.filter(m=>$('matchFilter').value==='all'||($('matchFilter').value==='ready')===(m.status==='PRÊT'));xs=ordered(xs,matchSort,(m,k)=>k==='files'?m.files.length:k==='emails'?m.emails.join(','):m[k]);for(const m of xs){const tr=document.createElement('tr');if(!m.selected)tr.className='excluded';else if(m.status!=='PRÊT')tr.className='issue';for(const text of [m.classe,m.nom,m.prenom,`${m.files.length} (${[...new Set(m.files.map(x=>x.subject))].join(', ')})`]){const td=document.createElement('td');td.textContent=text;tr.append(td)}const td=document.createElement('td');const inp=document.createElement('input');inp.value=m.emails.join('; ');inp.placeholder='adresse1@…; adresse2@…';inp.title='Séparer les adresses avec ; — responsables : '+m.representants.map(responsibleName).filter(Boolean).join(' / ');inp.addEventListener('change',()=>{m.emails=inp.value.split(/[;,]/).map(x=>x.trim()).filter(Boolean);m.modified=true;m.status=m.weak?'IDENTITÉ À VÉRIFIER':m.emails.length?'PRÊT':'SANS EMAIL';showMatches()});td.append(inp);if(m.representants.length){const names=document.createElement('small');names.textContent=m.representants.map((r,i)=>`R${i+1} : ${responsibleName(r)||'non renseigné'}`).join(' · ');names.style.display='block';names.style.color='#617285';td.append(names)}tr.append(td);const state=document.createElement('td');state.textContent=m.status;tr.append(state);const check=document.createElement('td'),box=document.createElement('input');box.type='checkbox';box.checked=m.selected;box.setAttribute('aria-label',`Inclure ${m.prenom} ${m.nom} dans l'envoi`);box.addEventListener('change',()=>{m.selected=box.checked;showMatches()});check.append(box);tr.append(check);body.append(tr)}updateSummary()}
+function updateSummary(){$('matchSummary').textContent=`${matched.length} élèves · ${matched.filter(m=>m.selected&&m.status==='PRÊT').length} prêts sélectionnés · ${matched.filter(m=>m.selected&&m.status!=='PRÊT').length} à contrôler · ${matched.filter(m=>!m.selected).length} exclus`}
+async function assemble(recordsForStudent){const result=[];const originals=new Map();for(const r of recordsForStudent){let src=originals.get(r.fileIndex);if(!src){src=await PDFLib.PDFDocument.load(await selected[r.fileIndex].arrayBuffer());originals.set(r.fileIndex,src)}const out=await PDFLib.PDFDocument.create();const [page]=await out.copyPages(src,[r.page]);out.addPage(page);const buffer=await out.save();let binary='';const block=8192;for(let i=0;i<buffer.length;i+=block)binary+=String.fromCharCode(...buffer.subarray(i,i+block));result.push({name:[safe(r.classe),safe(r.nom).toUpperCase(),safe(r.prenom),r.subject].filter(Boolean).join('_')+'.pdf',data:btoa(binary)})}return result}
+function template(s,m){return s.replace(/\{eleve\}/g,`${m.prenom} ${m.nom}`).replace(/\{classe\}/g,m.classe).replace(/\{responsable1\}/g,responsibleName(m.representants[0])).replace(/\{responsable2\}/g,responsibleName(m.representants[1])).replace(/\{responsables\}/g,m.representants.map(responsibleName).filter(Boolean).join(' et '))}
+async function dispatch(mode){
+ const eligible=matched.filter(m=>m.selected),excluded=matched.filter(m=>!m.selected);
+ if(!matched.length)return $('sendStatus').textContent='Aucun élève à traiter.';
+ const blocked=eligible.filter(m=>m.status!=='PRÊT');
+ if(blocked.length)return $('sendStatus').textContent=`Envoi bloqué : ${blocked.length} élève(s) sélectionné(s) nécessitent un contrôle. Décochez-les dans « 03 · Destinataires » ou corrigez les données.`;
+ if(!csrf)return $('sendStatus').textContent='Service local non disponible.';
+ const host=$('smtpHost').value.trim(),port=Number($('smtpPort').value),email=$('smtpEmail').value.trim(),password=$('smtpPassword').value;
+ let confirmPhrase='';if(mode==='reel'&&eligible.length){
+  if(!host||!email||!password)return $('sendStatus').textContent='Complétez la configuration SMTP pour un envoi réel.';
+  if(!window.confirm(`Campagne : ${eligible.length} élève(s) sélectionné(s), ${excluded.length} exclu(s). Les exclus seront consignés comme NON TRAITÉS. Continuer ?`))return;
+  confirmPhrase=window.prompt('Pour confirmer définitivement, saisir ENVOYER (en majuscules) :')||'';
+  if(confirmPhrase!=='ENVOYER')return $('sendStatus').textContent='Envoi annulé.';
+ }
+ $('simulate').disabled=$('sendReal').disabled=true;
+ const summary=[];
+ try{
+  // Journaliser les exclusions dans la même campagne avant les éventuels envois.
+  if(excluded.length){
+   const payload={campagne:$('campaign').value,items:excluded.map(m=>({classe:m.classe,nom:m.nom,prenom:m.prenom,emails:m.emails,files:m.files.map(f=>({name:[safe(f.classe),safe(f.nom).toUpperCase(),safe(f.prenom),f.subject].filter(Boolean).join('_')+'.pdf'})),detail:`Exclusion manuelle — ${m.status}`}))};
+   const resp=await fetch('/api/exclusions',{method:'POST',headers:{'Content-Type':'application/json','X-Local-Token':csrf},body:JSON.stringify(payload)});
+   const result=await resp.json();if(!resp.ok)throw Error(result.error||'Journal des exclusions indisponible');
+  }
+  for(let i=0;i<eligible.length;i++){
+   const m=eligible[i];$('sendStatus').textContent=`${mode==='reel'?'Envoi':'Simulation'} : ${i+1}/${eligible.length} — ${m.prenom} ${m.nom}`;
+   const files=await assemble(m.files);
+   const payload={mode,confirmation:confirmPhrase,campagne:$('campaign').value,smtp:{host,port,email,password},items:[{classe:m.classe,nom:m.nom,prenom:m.prenom,emails:m.emails,subject:template($('mailSubject').value,m),body:template($('mailBody').value,m),files}]};
+   const resp=await fetch('/api/send',{method:'POST',headers:{'Content-Type':'application/json','X-Local-Token':csrf},body:JSON.stringify(payload)});
+   const result=await resp.json();if(!resp.ok)throw Error(result.error||'Erreur serveur');summary.push(result.results[0]);
+  }
+  $('sendStatus').textContent=`Terminé : ${summary.filter(x=>x.status!=='ERREUR').length} ${mode==='reel'?'acceptés SMTP':'simulés'}, ${summary.filter(x=>x.status==='ERREUR').length} erreurs, ${excluded.length} non traités (exclus). Voir le journal.`;await loadAudit();
+ }catch(e){$('sendStatus').textContent=`Interrompu après ${summary.length} élève(s) : ${e.message}. Vérifiez le journal AVANT toute reprise pour éviter des doublons.`}finally{$('simulate').disabled=$('sendReal').disabled=false;$('smtpPassword').value=''}
+}
+$('simulate').addEventListener('click',()=>dispatch('simulation'));$('sendReal').addEventListener('click',()=>dispatch('reel'));
+async function loadAudit(){try{const resp=await fetch('/api/audit',{headers:{'X-Local-Token':csrf}});if(!resp.ok)throw Error('Journal inaccessible');audit=(await resp.json()).rows;showAudit()}catch(e){$('auditCount').textContent=e.message}}
+$('loadAudit').addEventListener('click',loadAudit);for(const th of document.querySelectorAll('th[data-asort]')){th.addEventListener('click',()=>{let key=th.dataset.asort;auditSort.dir=auditSort.key===key?-auditSort.dir:1;auditSort.key=key;showAudit()})}
+function showAudit(){const body=$('auditRows');body.replaceChildren();for(const r of ordered(audit,auditSort,(r,k)=>r[k])){const tr=document.createElement('tr');for(const k of ['horodatage_utc','statut','classe','nom','destinataires','piece_jointe']){const td=document.createElement('td');td.textContent=r[k]||'';tr.append(td)}body.append(tr)}$('auditCount').textContent=`${audit.length} lignes de journal`}
+$('exportAudit').addEventListener('click',()=>{if(!audit.length)return;const columns=['horodatage_utc','campagne','statut','classe','nom','prenom','destinataires','sujet','piece_jointe','sha256','message_id','detail'];const csv='\uFEFF'+[columns.join(';'),...audit.map(r=>columns.map(k=>'"'+String(r[k]||'').replace(/"/g,'""')+'"').join(';'))].join('\r\n');const url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));const a=document.createElement('a');a.href=url;a.download='journal_evaluations.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),60000)});
+
+</script><script>
+"use strict";
+const steps=new Set(['pdf','contacts','matches','send','history','help']);
+function navigate(step){if(!steps.has(step))step='pdf';document.body.dataset.activeStep=step;for(const p of document.querySelectorAll('[data-step]'))p.hidden=p.dataset.step!==step;for(const b of document.querySelectorAll('[data-nav]')){const active=b.dataset.nav===step;b.classList.toggle('active',active);b.setAttribute('aria-current',active?'step':'false')}history.replaceState(null,'','#'+step);window.scrollTo(0,0)}
+for(const b of document.querySelectorAll('[data-nav]'))b.addEventListener('click',()=>navigate(b.dataset.nav));
+window.addEventListener('hashchange',()=>navigate(location.hash.slice(1)));
+navigate(location.hash.slice(1)||'pdf');
+
+</script><script>
+'use strict';
+// GitHub Pages edition: no localhost API; no network transmission of school records.
+(()=>{
+  const onReady=()=>{
+    const byId=id=>document.getElementById(id);
+    const live=byId('sendStatus');
+    if(live)live.textContent='Mode GitHub Pages : découpage, rapprochement et export ZIP locaux. Aucun SMTP direct.';
+    const real=byId('sendReal');
+    real.disabled=true;
+    real.title='Envoi réel indisponible depuis GitHub Pages. Un service HTTPS institutionnel est nécessaire.';
+    const simulate=byId('simulate');
+    simulate.textContent='Préparer et exporter la campagne (ZIP)';
+    simulate.addEventListener('click',async e=>{
+      e.stopImmediatePropagation();
+      try{
+        if(typeof matched==='undefined'||!matched.length)throw Error('Importez les PDF et les contacts PRONOTE.');
+        const eligible=matched.filter(m=>m.selected),excluded=matched.filter(m=>!m.selected);
+        if(!eligible.length)throw Error('Aucun destinataire sélectionné.');
+        const invalid=eligible.filter(m=>m.status!=='PRÊT'||!m.files.length);
+        if(invalid.length)throw Error(`${invalid.length} élève(s) nécessitent une vérification : export bloqué.`);
+        const zip=new JSZip();
+        const manifest={schema:1,campagne:byId('campaign').value,horodatage:new Date().toISOString(),statut:'PREPARE_NON_ENVOYE',messages:[],exclus:excluded.map(m=>({classe:m.classe,nom:m.nom,prenom:m.prenom,statut:'NON_TRAITE_EXCLU'}))};
+        let index=0;
+        simulate.disabled=true;
+        for(const m of eligible){
+          live.textContent=`Préparation ${index+1}/${eligible.length} : ${m.prenom} ${m.nom}`;
+          const attachments=await assemble(m.files);
+          const filepaths=[];
+          for(const file of attachments){
+            const path='pieces_jointes/'+String(++index).padStart(5,'0')+'_'+file.name.replace(/[^A-Za-z0-9_.-]/g,'_');
+            zip.file(path,file.data,{base64:true});filepaths.push(path);
+          }
+          manifest.messages.push({eleve:{classe:m.classe,nom:m.nom,prenom:m.prenom},to:m.emails,subject:template(byId('mailSubject').value,m),body:template(byId('mailBody').value,m),attachments:filepaths,statut:'PREPARE_NON_ENVOYE'});
+        }
+        zip.file('campagne.json',JSON.stringify(manifest,null,2));
+        const csv=(value)=>'"'+String(value??'').replace(/"/g,'""')+'"';
+        const columns=['horodatage','campagne','statut','classe','nom','prenom','destinataires','pieces_jointes'];
+        const csvLines=[columns.join(';'),...manifest.messages.map(m=>[manifest.horodatage,manifest.campagne,m.statut,m.eleve.classe,m.eleve.nom,m.eleve.prenom,m.to.join(', '),m.attachments.join(', ')].map(csv).join(';')),...manifest.exclus.map(m=>[manifest.horodatage,manifest.campagne,m.statut,m.classe,m.nom,m.prenom,'',''].map(csv).join(';'))];
+        zip.file('journal_preparation.csv','\uFEFF'+csvLines.join('\r\n'));
+        zip.file('LISEZ-MOI.txt','CONFIDENTIEL : donnees d eleves et adresses des responsables.\nAucun courriel envoye. Supprimez cette archive apres usage.\n');
+        const blob=await zip.generateAsync({type:'blob',compression:'DEFLATE',compressionOptions:{level:3}});
+        const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='split_eval_campagne_confidentielle.zip';a.click();setTimeout(()=>URL.revokeObjectURL(url),30000);
+        live.textContent=`ZIP prêt : ${manifest.messages.length} dossiers, ${manifest.exclus.length} exclus. AUCUN EMAIL ENVOYÉ.`;
+      }catch(error){live.textContent='Préparation impossible : '+error.message}finally{simulate.disabled=false}
+    },true);
+    const load=byId('loadAudit');load.disabled=true;load.title='Le journal serveur est indisponible sur GitHub Pages.';
+    const exp=byId('exportAudit');exp.disabled=true;exp.title='Le journal de préparation figure dans le ZIP exporté.';
+    const help=document.querySelector('[data-step=help]');if(help){const p=document.createElement('p');p.textContent='Mode GitHub Pages : aucune API SMTP ni journal serveur. Les PDF et contacts sont traités dans le navigateur. Le bouton de préparation télécharge un ZIP confidentiel sans envoyer de messages. Les dépendances JavaScript sont actuellement chargées depuis un CDN et nécessitent un audit avant usage avec des données nominatives.';help.prepend(p)}
+  };
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',onReady);else onReady();
+})();
 
 </script></body></html>
