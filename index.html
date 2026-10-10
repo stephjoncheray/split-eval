@@ -267,7 +267,7 @@ navigate(location.hash.slice(1)||'pdf');
     thunder.className='btn secondary';thunder.type='button';
     thunder.id='exportThunderbird';thunder.textContent='Brouillons Thunderbird (.eml ZIP)';
     simulate.insertAdjacentElement('afterend',thunder);
-    const mimeB64=bytes=>{let binary='';for(let i=0;i<bytes.length;i+=8192)binary+=String.fromCharCode(...bytes.subarray(i,i+8192));return btoa(binary).replace(/.{1,76}/g,'    const load=byId('loadAudit');\r\n').trimEnd()};
+    const mimeB64=bytes=>{let binary='';for(let i=0;i<bytes.length;i+=8192)binary+=String.fromCharCode(...bytes.subarray(i,i+8192));return btoa(binary).match(/.{1,76}/g).join('\r\n')};
     const utf8B64=text=>mimeB64(new TextEncoder().encode(text)).replace(/\r\n/g,'');
     const header=text=>'=?UTF-8?B?'+utf8B64(text)+'?=';
     const addressList=arr=>arr.filter(x=>/^[^\s@<>;,]+@[^\s@<>;,]+\.[^\s@<>;,]+$/.test(x)).join(', ');
