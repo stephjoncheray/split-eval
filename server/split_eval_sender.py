@@ -39,7 +39,9 @@ def load_campaign(path):
         raise ValueError("Archive absente ou trop volumineuse")
     with zipfile.ZipFile(path) as z:
         entries = z.infolist()
-        if sum(x.file_size for x in entries) > MAX_ZIP_BYTES * 2:\n            raise ValueError("Contenu decompresse trop volumineux")\n        if len(entries) > MAX_FILES:
+        if sum(x.file_size for x in entries) > MAX_ZIP_BYTES * 2:
+            raise ValueError("Contenu decompresse trop volumineux")
+        if len(entries) > MAX_FILES:
             raise ValueError("Trop de fichiers dans le ZIP")
         names = [x.filename for x in entries]
         if len(names) != len(set(names)) or "campagne.json" not in names:
