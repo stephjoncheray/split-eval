@@ -1,0 +1,23 @@
+# Fichiers sensibles et locaux
+.env
+.env.*
+!.env.example
+data/
+donnees/
+private/
+secrets/
+*.csv
+*.xls
+*.xlsx
+*.xlsm
+*.pdf
+*.sqlite
+*.sqlite3
+*.db
+*.log
+journal_envois*
+EXP_ELEVE*
+__pycache__/
+*.py[cod]
+.venv/
+venv/
