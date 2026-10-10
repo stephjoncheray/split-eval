@@ -1,36 +1,28 @@
-# Split Eval — Préparation ponctuelle
+# Split Eval — V3 unifiée (édition GitHub Pages)
 
-Application web pour la préparation des restitutions individuelles des évaluations nationales.
+Application publique de préparation des restitutions individuelles des évaluations nationales, sans analyse statistique DEPP.
 
-## Modules
-- **05 — Fichiers PDF** : analyser des pages PDF, vérifier manuellement nom, prénom, classe et discipline, exporter les fiches découpées en ZIP.
-- **06 — Contacts PRONOTE** : importer un CSV et repérer les courriels des responsables.
-- **07 — Destinataires** : rapprocher les deux sources et exclure les ambiguïtés.
-- **08 — Diffusion SMTP** : préparer une campagne temporaire et **exporter un ZIP** contenant chaque pièce jointe PDF, `campagne.json` et `journal.csv`. Champs de configuration SMTP temporaires, **non utilisés pour envoyer** tant qu'aucun backend HTTPS institutionnel n'est déployé.
-- **09 — Historique** : événements de session ; journal CSV téléchargeable.
+## Fonctionnalités accessibles depuis le navigateur
 
-**Ce n'est pas une application d'analyse statistique DEPP.**
+1. **Documents PDF** : import multi-PDF, reconnaissance des pages selon les formats pris en charge, correction manuelle et export ZIP.
+2. **Import PRONOTE** : contacts au format CSV/Excel, avec rapprochement des noms et prénoms.
+3. **Destinataires** : validation, exclusions et vérification des adresses électroniques.
+4. **Préparation SMTP** : export local d'un ZIP confidentiel contenant les pièces jointes, un manifeste JSON des messages et le journal de préparation.
+5. **Historique** : pas de journal serveur sur GitHub Pages ; le journal de préparation figure dans le ZIP.
 
-## Limites actuelles
+## Accès
 
-1. **Aucun email réel n'est envoyé** et le bouton d'envoi reste désactivé. Aucun destinataire n'est crédité d'un statut « envoyé ».
-2. La reconnaissance des identités PDF n'est pas encore automatique : **saisie et validation manuelles obligatoires**.
-3. Les bibliothèques PDF sont actuellement téléchargées depuis un CDN. Leur hébergement local et un audit de confidentialité sont **nécessaires avant utilisation avec des documents scolaires nominatifs**.
-4. Le ZIP exporté contient **des données personnelles** : protéger l'accès au fichier et le supprimer après usage. L'effacement de la session ne supprime pas les téléchargements.
-5. Le traitement est effectué en mémoire dans l'onglet ouvert ; fermeture/rechargement = perte de la campagne non exportée.
-6. La préparation permet plusieurs pièces jointes par élève. **Vérifier les associations** avant tout usage opérationnel. Les homonymes et duplications restent un risque.
+GitHub Pages (si activé dans **Settings → Pages**, branche `main`, racine `/`) :
+https://stephjoncheray.github.io/split-eval/
 
-## SMTP réel — architecture requise
+L'application est dans un **index.html autonome** (CSS et JavaScript de la V3 intégrés directement). Le dépôt conserve ses autres fichiers historiques, qui ne sont pas requis par la page publiée.
 
-GitHub Pages ne permet pas d'ouvrir une connexion SMTP. Pour envoyer réellement :
-- un service institutionnel **HTTPS authentifié**, non ouvert comme relais SMTP arbitraire ;
-- configuration du ou des relais autorisés côté serveur, TLS obligatoire ;
-- transmission de la campagne uniquement après sélection et confirmation explicites ;
-- simulation, limitation de débit, suivi des erreurs, acceptation du serveur SMTP et journal téléchargeable ;
-- destruction des fichiers temporaires selon une durée et des mesures de confidentialité vérifiées.
+## Limitations
 
-**Aucun identifiant SMTP, PDF, CSV ou journal d'élève ne doit être commité dans GitHub.**
+**Aucun courrier n'est envoyé par GitHub Pages.** L'envoi SMTP réel nécessite une passerelle HTTPS institutionnelle authentifiée. Le bouton d'envoi réel est désactivé ; le bouton de préparation produit un ZIP local.
 
-## Hébergement
+**Confidentialité** : la page fait actuellement appel à des bibliothèques externes depuis cdnjs. Ne chargez pas de documents scolaires nominatifs avant audit des dépendances, auto-hébergement et validation de sécurité. Un ZIP téléchargé contient des données personnelles et doit être protégé puis supprimé après traitement.
 
-Le dépôt reste privé. Pour un accès universel, une interface statique auditée pourra être publiée via un second dépôt GitHub Pages public ; **site public ne signifie pas données publiques**, sous réserve que tout traitement demeure local et qu'aucun script tiers ne récupère les fichiers.
+Le traitement PDF dépend d'une couche texte exploitable et des mises en page prévues par le parseur ; il faut contrôler les correspondances avant tout envoi.
+
+La syntaxe JavaScript a été vérifiée, mais la recette graphique dans un navigateur et le déploiement effectif de Pages restent à confirmer.
