@@ -10,12 +10,12 @@
 <section id="pdf" class="active"><h2>05 · Fiches individuelles PDF</h2><p>Chargez les restitutions au format PDF. Les pages sont analysées localement ; la reconnaissance automatique reste à valider.</p><label>PDF : <input id="pdfFiles" type="file" accept=".pdf,application/pdf" multiple></label><button id="parse" class="primary">Analyser les pages</button><p id="pdfStatus" class="status">Aucun fichier.</p><div class="scroll"><table><thead><tr><th>Document</th><th>Page</th><th>Classe</th><th>Nom</th><th>Prénom</th><th>Discipline</th><th>Contrôle</th></tr></thead><tbody id="pdfRows"></tbody></table></div><button id="zip" disabled>Exporter les fiches validées (ZIP)</button></section>
 <section id="pronote"><h2>06 · Contacts PRONOTE</h2><p>CSV au format PRONOTE (séparateur point-virgule, idéalement UTF-8) : NOM, PRENOM, R1_EMAIL, R2_EMAIL. Les contacts restent en mémoire locale.</p><input id="contactsFile" type="file" accept=".csv,text/csv"><p id="contactStatus" class="status">Aucun contact.</p></section>
 <section id="recipients"><h2>07 · Destinataires</h2><p>Les lignes ambiguës, sans courriel ou sans identité complète sont exclues par défaut.</p><button id="refresh" class="primary">Recalculer les correspondances</button><p id="matchStatus" class="status">Importez PDF et PRONOTE.</p><div class="scroll"><table><thead><tr><th>Inclure</th><th>Élève</th><th>Classe</th><th>Courriels</th><th>Fichiers</th><th>État</th></tr></thead><tbody id="matchRows"></tbody></table></div></section>
-<section id="smtp"><h2>08 · Préparation SMTP</h2><p>Préparer la campagne ne déclenche aucun message. L'envoi réel nécessite une API serveur institutionnelle authentifiée, non configurée dans cette préversion.</p><label>Campagne <input id="campaign" value="Evaluations"></label><label>Objet <input id="subject" value="Résultats des évaluations — {eleve}" size="48"></label><p><label>Message<br><textarea id="body" rows="5" cols="75">Bonjour,\n\nVeuillez trouver ci-joint la restitution des évaluations de {eleve}.\n\nCordialement.</textarea></label></p><button id="prepare" class="primary">Préparer la campagne en un clic</button><button id="send" disabled title="API sécurisée non configurée">Envoi réel (indisponible)</button><p id="sendStatus" class="status">Aucune campagne préparée.</p></section>
+<section id="smtp"><h2>08 · Préparation SMTP</h2><p>Préparer la campagne ne déclenche aucun message. L'envoi réel nécessite une API serveur institutionnelle authentifiée, non configurée dans cette préversion.</p><label>Campagne <input id="campaign" value="Evaluations"></label><label>Objet <input id="subject" value="Résultats des évaluations — {eleve}" size="48"></label><p><label>Message<br><textarea id="body" rows="5" cols="75">Bonjour,\n\nVeuillez trouver ci-joint la restitution des évaluations de {eleve}.\n\nCordialement.</textarea></label></p><button id="prepare" class="primary">Préparer la campagne en un clic</button><p><label>Serveur SMTP <input id="smtpHost" placeholder="smtp.education.gouv.fr" autocomplete="off"></label><label>Port <input id="smtpPort" type="number" min="1" max="65535" value="587"></label><label>Sécurité <select id="smtpTls"><option value="starttls">STARTTLS</option><option value="ssl">SSL/TLS</option></select></label></p><p><label>Expéditeur <input id="smtpFrom" type="email" autocomplete="off"></label><label>Identifiant <input id="smtpUser" autocomplete="off"></label><label>Mot de passe <input id="smtpPassword" type="password" autocomplete="off"></label></p><p class="muted">Ces paramètres restent dans les champs de cette page. Ils ne sont pas inclus dans les exports et ne sont transmis à aucun serveur par cette version.</p><button id="exportCampaign" disabled>Récupérer la campagne complète (ZIP)</button> <button id="exportLog">Télécharger le journal CSV</button> <button id="erase" class="primary">Effacer la session</button><button id="send" disabled title="API HTTPS institutionnelle non configurée">Envoi réel (indisponible)</button><p id="sendStatus" class="status">Aucune campagne préparée.</p></section>
 <section id="history"><h2>09 · Historique local</h2><p>Journal des actions de cette session uniquement, non persistant et non assimilable à une preuve d'envoi SMTP.</p><div id="audit" class="status">Aucun événement.</div></section>
 </main>
 <script>
 'use strict';
-const state={pages:[],contacts:[],matches:[],events:[]},$=id=>document.getElementById(id);
+const state={pages:[],contacts:[],matches:[],events:[],prepared:[]},$=id=>document.getElementById(id);
 const escapeHTML=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const norm=s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().replace(/[^A-Z0-9]/g,'');
 function log(msg){state.events.unshift(new Date().toLocaleString('fr-FR')+' : '+msg);$('audit').textContent=state.events.join('\n');}
@@ -24,21 +24,65 @@ function csvLine(line,sep=';'){const out=[];let cur='',q=false;for(let i=0;i<lin
 function parseCSV(text){text=text.replace(/^\uFEFF/,'');const lines=text.split(/\r?\n/).filter(x=>x.trim());if(!lines.length)throw Error('CSV vide');const sep=(lines[0].match(/;/g)||[]).length>=(lines[0].match(/,/g)||[]).length?';':',';const headers=csvLine(lines.shift(),sep).map(x=>norm(x));return lines.map(line=>{const fields=csvLine(line,sep),r={};headers.forEach((h,i)=>r[h]=(fields[i]||'').trim());return r})}
 function pdfKind(text,filename){const s=(text+' '+filename).toLowerCase();const fr=/fran[cç]ais/.test(s),math=/math[eé]matiques?/.test(s);return fr&&math?'FR-MATH':fr?'FR':math?'MATH':'À VÉRIFIER'}
 async function parsePdfs(){
- const files=[...$('pdfFiles').files];state.pages=[];$('pdfRows').replaceChildren();$('zip').disabled=true;
+ const files=[...$('pdfFiles').files];state.pages=[];state.prepared=[];$('exportCampaign').disabled=true;$('pdfRows').replaceChildren();$('zip').disabled=true;
  if(!files.length){$('pdfStatus').textContent='Sélectionnez au moins un PDF.';return}
  if(!window.pdfjsLib||!window.PDFLib||!window.JSZip){$('pdfStatus').textContent='Bibliothèques PDF non chargées. Ne pas importer de données confidentielles avant hébergement local des dépendances.';return}
  try{for(const f of files){const bytes=await f.arrayBuffer();const pdf=await pdfjsLib.getDocument({data:new Uint8Array(bytes.slice(0))}).promise;for(let i=1;i<=pdf.numPages;i++){const page=await pdf.getPage(i),items=(await page.getTextContent()).items;const txt=items.map(x=>x.str).join(' ');const classe=(txt.match(/\b(?:6|5|4|3)[A-Z]\d\b/i)||[])[0]||'';const record={source:f.name,bytes,page:i,classe,nom:'',prenom:'',kind:pdfKind(txt,f.name),checked:false};state.pages.push(record)}}renderPages();log('PDF chargés : '+state.pages.length+' pages. Validation manuelle requise.')}catch(e){$('pdfStatus').textContent='Erreur PDF : '+e.message}}
 function renderPages(){const tb=$('pdfRows');tb.replaceChildren();state.pages.forEach((p,i)=>{const tr=document.createElement('tr');tr.innerHTML='<td>'+escapeHTML(p.source)+'</td><td>'+p.page+'</td><td><input size="5" data-i="'+i+'" data-key="classe" value="'+escapeHTML(p.classe)+'"></td><td><input size="13" data-i="'+i+'" data-key="nom"></td><td><input size="13" data-i="'+i+'" data-key="prenom"></td><td><select data-i="'+i+'" data-key="kind">'+['FR','MATH','FR-MATH','À VÉRIFIER'].map(k=>'<option '+(p.kind===k?'selected':'')+'>'+k+'</option>').join('')+'</select></td><td>Vérification manuelle obligatoire</td>';tb.append(tr)});$('pdfStatus').textContent=state.pages.length+' pages importées. Complétez et vérifiez les identités avant le ZIP.';$('zip').disabled=false}
 $('pdfRows').addEventListener('input',e=>{const el=e.target,i=Number(el.dataset.i);if(Number.isInteger(i)&&state.pages[i]&&['classe','nom','prenom','kind'].includes(el.dataset.key))state.pages[i][el.dataset.key]=el.value.trim()});
 $('parse').onclick=parsePdfs;
-$('contactsFile').onchange=async e=>{try{const f=e.target.files[0];if(!f)return;const data=parseCSV(await f.text());if(!data.length||!('NOM'in data[0])||!('PRENOM'in data[0]))throw Error('Colonnes NOM/PRENOM absentes');state.contacts=data;$('contactStatus').textContent=data.length+' contacts lus. Vérifiez les correspondances.';log('Import PRONOTE : '+data.length+' lignes')}catch(err){$('contactStatus').textContent='Erreur : '+err.message}};
-function groupMatches(){const groups=new Map();state.pages.forEach(p=>{const key=norm(p.nom)+'|'+norm(p.prenom);if(!p.nom||!p.prenom)return;const g=groups.get(key)||{nom:p.nom,prenom:p.prenom,classe:p.classe,files:[],recipients:[],issue:''};g.files.push(p);if(g.classe&&p.classe&&norm(g.classe)!==norm(p.classe))g.issue='Classes contradictoires';groups.set(key,g)});
+$('contactsFile').onchange=async e=>{try{const f=e.target.files[0];if(!f)return;const data=parseCSV(await f.text());if(!data.length||!('NOM'in data[0])||!('PRENOM'in data[0]))throw Error('Colonnes NOM/PRENOM absentes');state.contacts=data;state.prepared=[];$('exportCampaign').disabled=true;$('contactStatus').textContent=data.length+' contacts lus. Vérifiez les correspondances.';log('Import PRONOTE : '+data.length+' lignes')}catch(err){$('contactStatus').textContent='Erreur : '+err.message}};
+function groupMatches(){state.prepared=[];$('exportCampaign').disabled=true;const groups=new Map();state.pages.forEach(p=>{const key=norm(p.nom)+'|'+norm(p.prenom);if(!p.nom||!p.prenom)return;const g=groups.get(key)||{nom:p.nom,prenom:p.prenom,classe:p.classe,files:[],recipients:[],issue:''};g.files.push(p);if(g.classe&&p.classe&&norm(g.classe)!==norm(p.classe))g.issue='Classes contradictoires';groups.set(key,g)});
 state.matches=[...groups.values()].map(g=>{const found=state.contacts.filter(c=>norm(c.NOM)===norm(g.nom)&&norm(c.PRENOM)===norm(g.prenom));g.recipients=[...new Set(found.flatMap(c=>[c.R1EMAIL,c.R2EMAIL].filter(x=>/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(x||''))))];g.issue=g.issue||(found.length!==1?'Correspondance PRONOTE '+found.length:g.recipients.length?'':'Aucun email valide');g.selected=!g.issue;return g});
 const tb=$('matchRows');tb.replaceChildren();state.matches.forEach((g,i)=>{const tr=document.createElement('tr');tr.innerHTML='<td><input type="checkbox" data-idx="'+i+'" '+(g.selected?'checked':'')+' '+(g.issue?'disabled':'')+'></td><td>'+escapeHTML(g.nom+' '+g.prenom)+'</td><td>'+escapeHTML(g.classe)+'</td><td>'+escapeHTML(g.recipients.join(', '))+'</td><td>'+g.files.length+'</td><td>'+escapeHTML(g.issue||'Prêt')+'</td>';tb.append(tr)});
 $('matchStatus').textContent=state.matches.filter(g=>g.selected).length+' prêts sur '+state.matches.length+' élèves; '+state.pages.filter(p=>!p.nom||!p.prenom).length+' pages sans identité.'}
 $('refresh').onclick=groupMatches;
-$('matchRows').onchange=e=>{const i=Number(e.target.dataset.idx);if(state.matches[i]&&!state.matches[i].issue)state.matches[i].selected=e.target.checked};
+$('matchRows').onchange=e=>{const i=Number(e.target.dataset.idx);if(state.matches[i]&&!state.matches[i].issue){state.matches[i].selected=e.target.checked;state.prepared=[];$('exportCampaign').disabled=true}};
 $('zip').onclick=async()=>{const rows=state.pages.filter(p=>p.nom&&p.prenom&&p.classe&&p.kind!=='À VÉRIFIER');if(!rows.length){$('pdfStatus').textContent='Aucune page validée à exporter.';return}const zip=new JSZip();for(const p of rows){const doc=await PDFLib.PDFDocument.load(p.bytes.slice(0));const target=await PDFLib.PDFDocument.create();const [part]=await target.copyPages(doc,[p.page-1]);target.addPage(part);let name=[p.classe,p.nom,p.prenom,p.kind].map(norm).join('_')+'.pdf';let suffix=1;while(zip.file(name))name=[p.classe,p.nom,p.prenom,p.kind,suffix++].map(norm).join('_')+'.pdf';zip.file(name,await target.save())}const blob=await zip.generateAsync({type:'blob'});download(blob,'split-eval-fiches.zip');log('Export ZIP : '+rows.length+' pages')};
 function download(blob,name){const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}
-$('prepare').onclick=()=>{groupMatches();const selected=state.matches.filter(x=>x.selected);const blockers=state.matches.filter(x=>x.issue);$('sendStatus').textContent=selected.length+' élèves prêts, '+blockers.length+' anomalies bloquées. Aucun envoi réalisé. Configuration d’une API HTTPS sécurisée nécessaire pour transmettre les pièces jointes et lancer un envoi confirmé.';log('Préparation : '+selected.length+' élèves ; aucun envoi SMTP');};
+function auditCsv(){const esc=v=>'"'+String(v??'').replace(/"/g,'""')+'"';return '\uFEFFhorodatage;evenement\r\n'+state.events.map(x=>esc(x)).join('\r\n')+'\r\n'}
+$('exportLog').onclick=()=>download(new Blob([auditCsv()],{type:'text/csv;charset=utf-8'}),'split-eval-journal.csv');
+$('prepare').onclick=()=>{
+  const prior=new Map(state.matches.map(g=>[norm(g.nom)+'|'+norm(g.prenom),g.selected]));
+  groupMatches();
+  state.matches.forEach(g=>{const k=norm(g.nom)+'|'+norm(g.prenom);if(prior.get(k)===false)g.selected=false});
+  const selected=state.matches.filter(g=>g.selected&&!g.issue&&g.files.length&&g.files.every(p=>p.classe&&p.nom&&p.prenom&&p.kind!=='À VÉRIFIER'));
+  const blocked=state.matches.length-selected.length;
+  state.prepared=selected;
+  $('exportCampaign').disabled=!selected.length;
+  $('sendStatus').textContent=selected.length+' dossiers préparés ; '+blocked+' exclus, ambigus ou incomplets. Aucun courrier envoyé. Téléchargez le ZIP sécurisé sur votre poste pour préparer le traitement SMTP.';
+  log('Préparation : '+selected.length+' dossiers ; '+blocked+' exclus ; aucun envoi SMTP');
+};
+$('exportCampaign').onclick=async()=>{
+ if(!state.prepared.length||!window.PDFLib||!window.JSZip)return;
+ const zip=new JSZip(),manifest={schema:1,campaign:$('campaign').value,created:new Date().toISOString(),messages:[]};
+ let n=0;
+ for(const g of state.prepared){
+  const attachments=[];
+  for(const p of g.files){
+   const doc=await PDFLib.PDFDocument.load(p.bytes.slice(0)),part=await PDFLib.PDFDocument.create();
+   const [pg]=await part.copyPages(doc,[p.page-1]);part.addPage(pg);
+   const path='pieces_jointes/'+String(++n).padStart(4,'0')+'_'+[p.classe,p.nom,p.prenom,p.kind].map(norm).join('_')+'.pdf';
+   zip.file(path,await part.save());attachments.push(path);
+  }
+  const eleve=g.prenom+' '+g.nom;
+  manifest.messages.push({student:{nom:g.nom,prenom:g.prenom,classe:g.classe},to:g.recipients,subject:$('subject').value.replaceAll('{eleve}',eleve),body:$('body').value.replaceAll('{eleve}',eleve),attachments,status:'PREPARE_NON_ENVOYE'});
+ }
+ zip.file('campagne.json',JSON.stringify(manifest,null,2));
+ zip.file('journal.csv',auditCsv());
+ zip.file('LISEZ-MOI.txt','CONFIDENTIEL : contient des donnees scolaires et les adresses des responsables. Aucun message n a ete envoye. Stocker le ZIP en lieu sur, supprimer apres traitement. Les identifiants SMTP ne figurent pas dans ce ZIP.\n');
+ download(await zip.generateAsync({type:'blob'}),'split-eval-campagne-confidentielle.zip');
+ log('Export campagne ZIP : '+manifest.messages.length+' dossiers, aucun envoi');
+};
+$('erase').onclick=()=>{
+ if(!confirm('Effacer les fichiers, contacts, destinataires, paramètres et le journal de cette session ?'))return;
+ state.pages=[];state.contacts=[];state.matches=[];state.prepared=[];state.events=[];
+ for(const id of ['pdfFiles','contactsFile','smtpHost','smtpFrom','smtpUser','smtpPassword'])$(id).value='';
+ for(const id of ['pdfRows','matchRows'])$(id).replaceChildren();
+ $('pdfStatus').textContent='Aucun fichier.';$('contactStatus').textContent='Aucun contact.';
+ $('matchStatus').textContent='Aucune correspondance.';$('sendStatus').textContent='Session effacée.';$('audit').textContent='Aucun événement.';
+ $('exportCampaign').disabled=true;$('zip').disabled=true;
+ alert('Session effacée de l’interface. Les copies déjà téléchargées restent sur votre ordinateur. Pour libérer la mémoire et éviter la restauration des champs, fermez cet onglet.');
+};
+
 </script></body></html>
