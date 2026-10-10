@@ -256,6 +256,8 @@ navigate(location.hash.slice(1)||'pdf');
         if(typeof matched==='undefined'||!matched.length)throw Error('Importez les PDF et les contacts PRONOTE.');
         const eligible=matched.filter(m=>m.selected),excluded=matched.filter(m=>!m.selected);
         if(!eligible.length)throw Error('Aucun destinataire sélectionné.');
+        const duplicateSubjects=eligible.map(m=>{const count={};for(const r of m.files){const k=String(r.subject||'').toUpperCase();count[k]=(count[k]||0)+1}return {m,count,duplicates:Object.entries(count).filter(([k,n])=>n>1)}}).filter(x=>x.duplicates.length);
+        if(duplicateSubjects.length){const ex=duplicateSubjects.slice(0,6).map(x=>x.m.classe+' '+x.m.nom+' '+x.m.prenom+' : '+x.duplicates.map(([k,n])=>k+' ×'+n).join(', ')).join(' ; ');throw Error('DOUBLONS DE MATIÈRE : '+duplicateSubjects.length+' élève(s). Vérifiez les pages PDF importées avant export. '+ex)}
         const invalid=eligible.filter(m=>m.status!=='PRÊT'||!m.files.length);
         if(invalid.length)throw Error(`${invalid.length} élève(s) nécessitent une vérification : export bloqué.`);
         const report=(byId('reportAddress').value||byId('smtpEmail').value).trim();if(byId('finalReport').checked&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(report))throw Error('Indiquez une adresse valide pour le rapport final.');
