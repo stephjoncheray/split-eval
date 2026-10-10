@@ -242,12 +242,13 @@ navigate(location.hash.slice(1)||'pdf');
         let index=0;
         simulate.disabled=true;
         for(const m of eligible){
-          live.textContent=`Préparation ${index+1}/${eligible.length} : ${m.prenom} ${m.nom}`;
+          live.textContent=`Préparation : ${index} fichier(s) / pour ${eligible.length} élèves`;
           const attachments=await assemble(m.files);
           const filepaths=[];
           for(const file of attachments){
             const basename=file.name.replace(/[^A-Za-z0-9_.-]/g,'_').replace(/^\d{3,7}_/,'');let path='pieces_jointes/'+basename;let suffix=2;while(zip.file(path)){path='pieces_jointes/'+basename.replace(/\.pdf$/i,`_${suffix++}.pdf`)}index++;
             zip.file(path,file.data,{base64:true});filepaths.push(path);
+            live.textContent=`Préparation : ${index} fichier(s) / pour ${eligible.length} élèves`;
           }
           manifest.messages.push({eleve:{classe:m.classe,nom:m.nom,prenom:m.prenom},to:m.emails,subject:template(byId('mailSubject').value,m),body:template(byId('mailBody').value,m),attachments:filepaths,statut:'PREPARE_NON_ENVOYE'});
         }
